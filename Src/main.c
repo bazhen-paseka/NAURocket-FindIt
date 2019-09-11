@@ -25,7 +25,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "lcd.h"
+
+	#include <string.h>
+	#include "lcd.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,6 +71,10 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
+
+#define STRING_LEFT  ((uint32_t)0x7466654C)
+#define STRING_RIGHT  ((uint32_t)0x74676952)
+
   /* USER CODE END 1 */
   
 
@@ -89,7 +96,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 	LCD_Init();
 	LCD_SetRotation(0);
@@ -98,6 +105,14 @@ int main(void)
 	//LCD_SetTextColor(GREEN, WHITE);
 
 	LCD_Printf("\n NAU_Rocket Find_It 2019 v0.1.0\n ");
+
+	char DataChar[100];
+	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v0.1.0\r\nUART1 for debug started on speed 115200\r\n");
+	HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+	#define UART_SIZE 250
+	uint8_t UART_Data[UART_SIZE];
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,7 +120,10 @@ int main(void)
   while (1)
   {
 	  HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
-	  HAL_Delay(300);
+	  //HAL_Delay(100);
+	  HAL_UART_Receive(&huart3, UART_Data, UART_SIZE, 300);
+	  HAL_UART_Transmit(&huart3, UART_Data, UART_SIZE, 100);
+	  LCD_Printf("%s", UART_Data);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -128,11 +146,12 @@ void SystemClock_Config(void)
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 8;
   RCC_OscInitStruct.PLL.PLLN = 180;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
