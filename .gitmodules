@@ -1,0 +1,3 @@
+[submodule "Drivers/display_ILI-93xx_sm"]
+	path = Drivers/display_ILI-93xx_sm
+	url = https://github.com/bazhen-paseka/display_ILI-93xx_sm.git

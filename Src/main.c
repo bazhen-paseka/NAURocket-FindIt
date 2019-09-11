@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -91,14 +91,20 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+	LCD_Init();
+	LCD_SetRotation(0);
+	LCD_FillScreen(BLACK);
+	LCD_SetTextColor(GREEN, BLACK);
+	//LCD_SetTextColor(GREEN, WHITE);
 
+	LCD_Printf("\n NAU_Rocket Find_It 2019 v0.1.0\n ");
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_TogglePin(KED_GREEN_GPIO_Port, KED_GREEN_Pin);
+	  HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 	  HAL_Delay(300);
     /* USER CODE END WHILE */
 
