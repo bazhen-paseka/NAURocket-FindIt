@@ -21,6 +21,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "fatfs.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -81,6 +83,8 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
+	FRESULT fres;
+
   /* USER CODE END 1 */
   
 
@@ -104,6 +108,8 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART3_UART_Init();
+  MX_SPI1_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
 	LCD_Init();
@@ -120,13 +126,32 @@ int main(void)
   	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
   	uint32_t rx_count;
 
+	/* Initialize SD Card low level SPI driver */
+  	FATFS_SPI_Init(&hspi1);
+	/* Mount SDCARD */
+	if (f_mount(&USERFatFS, "", 1) != FR_OK) {
+		/* Unmount SDCARD */
+		f_mount(NULL, "", 0);
+		Error_Handler();
+
+		sprintf(DataChar,"1) f_mount = Failed \r\n");
+		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+	}
+	else
+	{
+		sprintf(DataChar,"1) f_mount = FR_OK \r\n");
+		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+	}
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	uint32_t line = 0;
+	uint32_t circle_u32;
   while (1)
   {
-	HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+	//HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 	rx_count = RingBuffer_DMA_Count(&rx_buffer);
 
 	while (rx_count--)
@@ -139,6 +164,24 @@ int main(void)
 			LCD_Printf("%s\n", cmd);
 			sprintf(DataChar,"%s\r\n", cmd);
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+			/* Try to open file */
+			fres = f_open(&USERFile, "tm.txt", FA_OPEN_APPEND | FA_WRITE);
+			if (fres == FR_OK) {
+				/* Write to file */
+				f_printf(&USERFile, "%ul: Hello, sd card from TechMaker!\r\n", line++);
+				/* Close file */
+				f_close(&USERFile);
+				circle_u32++;
+				sprintf(DataChar,"2)fres = FR_OK \r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			}
+			else
+			{
+				sprintf(DataChar,"2)fres FAILED \r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			}
+
 			//if ((cmd[0]=='l')&& (cmd[1]=='e')&&(cmd[2]=='d')) LCD_Printf(text);
 			// react to command here
 			//if (strcmp(cmd,"adc")==0) LCD_Printf("U=3.3v\n");
@@ -148,6 +191,25 @@ int main(void)
 			//  skip \r  }
 		}
 		else {cmd[iCmd++ % 500] = c;}
+
+		if (circle_u32/10 == 1)
+		{
+			fres = f_open(&USERFile, "tm.txt", FA_OPEN_EXISTING | FA_READ);
+			if (fres == FR_OK)
+			{
+					char buff[200];
+					LCD_SetCursor(0, 0);
+					LCD_FillScreen(BLACK);
+					/* Read from file */
+					while (f_gets(buff, 200, &USERFile))
+					{
+						LCD_Printf(buff);
+					}
+						/* Close file */
+						f_close(&USERFile);
+			}
+			circle_u32 = 0;
+		}
 	} // end while
 
     /* USER CODE END WHILE */
