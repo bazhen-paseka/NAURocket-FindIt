@@ -20,6 +20,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -28,6 +29,7 @@
 
 	#include <string.h>
 	#include "lcd.h"
+	#include "ringbuffer_dma.h"
 
 /* USER CODE END Includes */
 
@@ -50,6 +52,14 @@
 
 /* USER CODE BEGIN PV */
 
+	extern DMA_HandleTypeDef hdma_usart3_rx;
+	RingBuffer_DMA rx_buffer;
+	#define RX_BUFFER_SIZE 100
+
+	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
+	char cmd[500];
+	int iCmd = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,10 +80,6 @@ void SystemClock_Config(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
-
-#define STRING_LEFT  ((uint32_t)0x7466654C)
-#define STRING_RIGHT  ((uint32_t)0x74676952)
 
   /* USER CODE END 1 */
   
@@ -96,22 +102,23 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+
 	LCD_Init();
-	LCD_SetRotation(0);
+	LCD_SetRotation(1);
 	LCD_FillScreen(BLACK);
 	LCD_SetTextColor(GREEN, BLACK);
-	//LCD_SetTextColor(GREEN, WHITE);
-
 	LCD_Printf("\n NAU_Rocket Find_It 2019 v0.1.0\n ");
 
 	char DataChar[100];
 	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v0.1.0\r\nUART1 for debug started on speed 115200\r\n");
 	HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
-	#define UART_SIZE 250
-	uint8_t UART_Data[UART_SIZE];
+	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
+  	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
+  	uint32_t rx_count;
 
   /* USER CODE END 2 */
 
@@ -119,11 +126,30 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
-	  //HAL_Delay(100);
-	  HAL_UART_Receive(&huart3, UART_Data, UART_SIZE, 300);
-	  HAL_UART_Transmit(&huart3, UART_Data, UART_SIZE, 100);
-	  LCD_Printf("%s", UART_Data);
+	HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+	rx_count = RingBuffer_DMA_Count(&rx_buffer);
+
+	while (rx_count--)
+	{
+		uint8_t c = RingBuffer_DMA_GetByte(&rx_buffer);
+		if (c == '\n')
+		{
+			cmd[iCmd++] = 0; // we received whole command, setting end of string
+			iCmd = 0;
+			LCD_Printf("%s\n", cmd);
+			sprintf(DataChar,"%s\r\n", cmd);
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			//if ((cmd[0]=='l')&& (cmd[1]=='e')&&(cmd[2]=='d')) LCD_Printf(text);
+			// react to command here
+			//if (strcmp(cmd,"adc")==0) LCD_Printf("U=3.3v\n");
+		}
+		else if (c == '\r')
+		{
+			//  skip \r  }
+		}
+		else {cmd[iCmd++ % 500] = c;}
+	} // end while
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
