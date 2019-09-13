@@ -29,6 +29,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+	#include <stdio.h>
 	#include <string.h>
 	#include "lcd.h"
 	#include "ringbuffer_dma.h"
@@ -74,8 +75,6 @@ void SystemClock_Config(void);
 
 	volatile uint8_t time_read_from_SD_u8 = 0;
 
-	uint32_t index_u32 = 0;
-
 /* USER CODE END 0 */
 
 /**
@@ -117,13 +116,15 @@ int main(void)
 
 	LCD_Init();
 	LCD_SetRotation(0);
-	LCD_FillScreen(BLACK);
-	LCD_SetTextColor(GREEN, BLACK);
-	LCD_Printf("\n NAU_Rocket Find_It 2019 v1.0.0\n ");
+	//	LCD_FillScreen(BLACK);
+	LCD_FillScreen(0x0000);
+	//	LCD_SetTextColor(GREEN, BLACK);
+	LCD_SetTextColor(0x07E0, 0x0000);
 
 	char DataChar[100];
-	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v1.0.0\r\nUART1 for debug started on speed 9600\r\n");
+	sprintf(DataChar,"\r\nNAU_Rocket Find_It 2019 v1.0.0\r\nfor_debug UART3 9600/8-N-1\r\n");
 	HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+	LCD_Printf("%s",DataChar);
 
 	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
   	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
@@ -137,16 +138,19 @@ int main(void)
 		f_mount(NULL, "", 0);
 		Error_Handler();
 
-		sprintf(DataChar,"1) f_mount = Failed \r\n");
+		sprintf(DataChar,"\r\nSD-card_mount  Failed \r\n");
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+		LCD_Printf("%s",DataChar);
 	}
 	else
 	{
-		sprintf(DataChar,"1) f_mount = FR_OK \r\n");
+		sprintf(DataChar,"\r\nSD-card_mount - OK \r\n");
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+		LCD_Printf("%s",DataChar);
 	}
+	HAL_Delay(3000);
 
-	LCD_FillScreen(BLACK);
+	LCD_FillScreen(0x0000);
 
   /* USER CODE END 2 */
 
@@ -164,10 +168,11 @@ int main(void)
 		{
 			cmd[iCmd++] = 0; // we received whole command, setting end of string
 			iCmd = 0;
-			//LCD_Printf("%s\n", cmd);
-			sprintf(DataChar,"%s\r\n", cmd);
+
+			sprintf(DataChar,"%s", cmd);
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
+			//LCD_FillScreen(BLACK);
 			LCD_SetCursor(0, 0);
 			uint32_t cmd_size_u32 = strlen(cmd);
 			for (uint32_t i=0; i<cmd_size_u32; i++)
@@ -175,41 +180,85 @@ int main(void)
 				if (cmd[i] == ',') LCD_Printf("\n");
 				else LCD_Printf("%c",cmd[i]);
 			}
+			LCD_Printf("\n");
 
-			index_u32++;
-			if (index_u32%2 == 0)
+				// CountCheckSum
+			uint8_t check_sum_u8 = cmd[1];
+			for (uint32_t i=2; i<(cmd_size_u32-3); i++)
 			{
-				fres = f_open(&USERFile, "A0.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
-				if (fres == FR_OK)
-				{
-					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
-					f_close(&USERFile);	/* Close file */
-					sprintf(DataChar,"Write_A0 OK \r\n");
-					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				}
-				else
-				{
-					sprintf(DataChar,"Write_A0 FAILED \r\n");
-					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				}
+				check_sum_u8 ^= cmd[i];
 			}
-			else	//	if (index_u32%2 == 0)
-			{
-				fres = f_open(&USERFile, "B1.txt", FA_OPEN_APPEND | FA_WRITE);	/* Try to open file */
-				if (fres == FR_OK)
-				{
-					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
-					f_close(&USERFile);	/* Close file */
+			sprintf(DataChar," (%X)\r\n", check_sum_u8);
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			LCD_Printf(" %X - CheckSum\n", check_sum_u8);
 
-					sprintf(DataChar,"Write_B1 OK\r\n");
-					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				}
-				else
-				{
-					sprintf(DataChar,"Write_B1 FAILED \r\n");
-					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				}
-			}	// end if (index_u32%2 == 0)
+			uint8_t check_sum_2_u8 = ((cmd[cmd_size_u32-2]-0x30)<<4) + (cmd[cmd_size_u32-1]-0x30);
+			LCD_Printf(" %X - CheckSum 2\n", check_sum_2_u8);
+			LCD_Printf(" %d - packet size\n\n", cmd_size_u32);
+
+			char my_file_name[100];
+			char my_file_name_1[100];
+			char my_file_name_2[100];
+			my_file_name[0] = 'C';
+			my_file_name[1] = '3';
+			my_file_name[2] = '4';
+			my_file_name[3] = '.';
+			my_file_name[4] = 't';
+			my_file_name[5] = 'x';
+			my_file_name[6] = 't';
+			my_file_name[7] = '\n';
+
+
+			for (int i =0; i<100; i++)
+			{
+				my_file_name_1[i] = 0x00;
+				my_file_name_2[i] = 0x00;
+			}
+			memcpy(my_file_name_1, &cmd[7], 6);
+			LCD_Printf("%s\n",my_file_name_1);
+			sprintf(my_file_name_2,"T_%s.txt", my_file_name_1);
+			LCD_Printf("%s\n",my_file_name_2);
+
+			//snprintf(my_file_name_rez, 11, "%s%s", my_file_name, second);
+
+				//	write to first file
+			//fres = f_open(&USERFile, "A0.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+			fres = f_open(&USERFile, my_file_name_2, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+			if (fres == FR_OK)
+			{
+				f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
+				f_close(&USERFile);	/* Close file */
+				sprintf(DataChar,"Write_to_A0 - OK \r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				LCD_Printf("%s",DataChar);
+			}
+			else
+			{
+				sprintf(DataChar,"Write_to_A0 FAILED \r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				LCD_Printf("%s",DataChar);
+			}
+
+			HAL_Delay(10);
+
+				//	write to second file
+			fres = f_open(&USERFile, "B1.txt", FA_OPEN_APPEND | FA_WRITE);	/* Try to open file */
+			if (fres == FR_OK)
+			{
+				f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
+				f_close(&USERFile);	/* Close file */
+
+				sprintf(DataChar,"Write_to_B1 - OK\r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				LCD_Printf("%s",DataChar);
+			}
+			else
+			{
+				sprintf(DataChar,"Write_to_B1 FAILED \r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				LCD_Printf("%s",DataChar);
+			}
+				//	end write to file
 		}
 		else if (c == '\r')
 		{
@@ -231,7 +280,7 @@ int main(void)
 
 					char buff[200];
 					LCD_SetCursor(0, 0);
-					LCD_FillScreen(BLACK);
+					LCD_FillScreen(0x0000);
 					/* Read from file */
 					while (f_gets(buff, 200, &USERFile))
 					{
