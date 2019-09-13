@@ -54,14 +54,6 @@
 
 /* USER CODE BEGIN PV */
 
-	extern DMA_HandleTypeDef hdma_usart3_rx;
-	RingBuffer_DMA rx_buffer;
-	#define RX_BUFFER_SIZE 100
-
-	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
-	char cmd[500];
-	int iCmd = 0;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,6 +64,15 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+	extern DMA_HandleTypeDef hdma_usart3_rx;
+	RingBuffer_DMA rx_buffer;
+	#define RX_BUFFER_SIZE 100
+	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
+	char cmd[500];
+	int iCmd = 0;
+
+	volatile uint8_t time_read_from_SD_u8 = 0;
 
 /* USER CODE END 0 */
 
@@ -113,7 +114,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 	LCD_Init();
-	LCD_SetRotation(1);
+	LCD_SetRotation(0);
 	LCD_FillScreen(BLACK);
 	LCD_SetTextColor(GREEN, BLACK);
 	LCD_Printf("\n NAU_Rocket Find_It 2019 v0.1.0\n ");
@@ -143,14 +144,52 @@ int main(void)
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 	}
 
+	LCD_FillScreen(BLACK);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	uint32_t line = 0;
-	uint32_t circle_u32;
+
   while (1)
   {
+
+	if (time_read_from_SD_u8 == 1)
+	{
+		sprintf(DataChar,"5) Start read from SD-card\r\n");
+		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+		fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
+		if (fres == FR_OK)
+		{
+			sprintf(DataChar,"6) read from SD: fres = FR_OK\r\n");
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+				char buff[200];
+				LCD_SetCursor(0, 0);
+				LCD_FillScreen(BLACK);
+				/* Read from file */
+				while (f_gets(buff, 200, &USERFile))
+				{
+					LCD_Printf(buff);
+					sprintf(DataChar,"%s\r\n", buff);
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+					/* Close file */
+					f_close(&USERFile);
+		}
+		else
+		{
+			sprintf(DataChar,"6) read from SD: fres FAILED\r\n");
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+		}
+
+		sprintf(DataChar,"7) END read from SD.\r\n");
+		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+		time_read_from_SD_u8 = 0;
+	}
+
 	//HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 	rx_count = RingBuffer_DMA_Count(&rx_buffer);
 
@@ -161,18 +200,26 @@ int main(void)
 		{
 			cmd[iCmd++] = 0; // we received whole command, setting end of string
 			iCmd = 0;
-			LCD_Printf("%s\n", cmd);
+			//LCD_Printf("%s\n", cmd);
 			sprintf(DataChar,"%s\r\n", cmd);
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
+			LCD_SetCursor(0, 0);
+			uint32_t cmd_size_u32 = strlen(cmd);
+			for (uint32_t i=0; i<cmd_size_u32; i++)
+			{
+				if (cmd[i] == ',') LCD_Printf("\n");
+				else LCD_Printf("%c",cmd[i]);
+			}
+
 			/* Try to open file */
-			fres = f_open(&USERFile, "tm.txt", FA_OPEN_APPEND | FA_WRITE);
+			fres = f_open(&USERFile, "tmm.txt", FA_OPEN_APPEND | FA_WRITE);
 			if (fres == FR_OK) {
 				/* Write to file */
-				f_printf(&USERFile, "%ul: Hello, sd card from TechMaker!\r\n", line++);
+				f_printf(&USERFile, "%s\r\n", cmd);
 				/* Close file */
 				f_close(&USERFile);
-				circle_u32++;
+
 				sprintf(DataChar,"2)fres = FR_OK \r\n");
 				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 			}
@@ -191,31 +238,12 @@ int main(void)
 			//  skip \r  }
 		}
 		else {cmd[iCmd++ % 500] = c;}
-
-		if (circle_u32/10 == 1)
-		{
-			fres = f_open(&USERFile, "tm.txt", FA_OPEN_EXISTING | FA_READ);
-			if (fres == FR_OK)
-			{
-					char buff[200];
-					LCD_SetCursor(0, 0);
-					LCD_FillScreen(BLACK);
-					/* Read from file */
-					while (f_gets(buff, 200, &USERFile))
-					{
-						LCD_Printf(buff);
-					}
-						/* Close file */
-						f_close(&USERFile);
-			}
-			circle_u32 = 0;
-		}
-	} // end while
+	} // end while rx_count
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+  }	// end main while
   /* USER CODE END 3 */
 }
 
