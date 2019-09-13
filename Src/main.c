@@ -74,6 +74,8 @@ void SystemClock_Config(void);
 
 	volatile uint8_t time_read_from_SD_u8 = 0;
 
+	uint32_t index_u32 = 0;
+
 /* USER CODE END 0 */
 
 /**
@@ -117,10 +119,10 @@ int main(void)
 	LCD_SetRotation(0);
 	LCD_FillScreen(BLACK);
 	LCD_SetTextColor(GREEN, BLACK);
-	LCD_Printf("\n NAU_Rocket Find_It 2019 v0.1.0\n ");
+	LCD_Printf("\n NAU_Rocket Find_It 2019 v1.0.0\n ");
 
 	char DataChar[100];
-	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v0.1.0\r\nUART1 for debug started on speed 115200\r\n");
+	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v1.0.0\r\nUART1 for debug started on speed 9600\r\n");
 	HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
 	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
@@ -153,44 +155,6 @@ int main(void)
 
   while (1)
   {
-
-	if (time_read_from_SD_u8 == 1)
-	{
-		sprintf(DataChar,"5) Start read from SD-card\r\n");
-		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-
-		fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
-		if (fres == FR_OK)
-		{
-			sprintf(DataChar,"6) read from SD: fres = FR_OK\r\n");
-			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-
-				char buff[200];
-				LCD_SetCursor(0, 0);
-				LCD_FillScreen(BLACK);
-				/* Read from file */
-				while (f_gets(buff, 200, &USERFile))
-				{
-					LCD_Printf(buff);
-					sprintf(DataChar,"%s\r\n", buff);
-					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				}
-					/* Close file */
-					f_close(&USERFile);
-		}
-		else
-		{
-			sprintf(DataChar,"6) read from SD: fres FAILED\r\n");
-			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-		}
-
-		sprintf(DataChar,"7) END read from SD.\r\n");
-		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-
-		time_read_from_SD_u8 = 0;
-	}
-
-	//HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 	rx_count = RingBuffer_DMA_Count(&rx_buffer);
 
 	while (rx_count--)
@@ -212,26 +176,40 @@ int main(void)
 				else LCD_Printf("%c",cmd[i]);
 			}
 
-			/* Try to open file */
-			fres = f_open(&USERFile, "tmm.txt", FA_OPEN_APPEND | FA_WRITE);
-			if (fres == FR_OK) {
-				/* Write to file */
-				f_printf(&USERFile, "%s\r\n", cmd);
-				/* Close file */
-				f_close(&USERFile);
-
-				sprintf(DataChar,"2)fres = FR_OK \r\n");
-				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-			}
-			else
+			index_u32++;
+			if (index_u32%2 == 0)
 			{
-				sprintf(DataChar,"2)fres FAILED \r\n");
-				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				fres = f_open(&USERFile, "A0.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+				if (fres == FR_OK)
+				{
+					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
+					f_close(&USERFile);	/* Close file */
+					sprintf(DataChar,"Write_A0 OK \r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+				else
+				{
+					sprintf(DataChar,"Write_A0 FAILED \r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
 			}
+			else	//	if (index_u32%2 == 0)
+			{
+				fres = f_open(&USERFile, "B1.txt", FA_OPEN_APPEND | FA_WRITE);	/* Try to open file */
+				if (fres == FR_OK)
+				{
+					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
+					f_close(&USERFile);	/* Close file */
 
-			//if ((cmd[0]=='l')&& (cmd[1]=='e')&&(cmd[2]=='d')) LCD_Printf(text);
-			// react to command here
-			//if (strcmp(cmd,"adc")==0) LCD_Printf("U=3.3v\n");
+					sprintf(DataChar,"Write_B1 OK\r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+				else
+				{
+					sprintf(DataChar,"Write_B1 FAILED \r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+			}	// end if (index_u32%2 == 0)
 		}
 		else if (c == '\r')
 		{
@@ -239,6 +217,42 @@ int main(void)
 		}
 		else {cmd[iCmd++ % 500] = c;}
 	} // end while rx_count
+
+	if (time_read_from_SD_u8 == 1)
+		{
+			sprintf(DataChar,"5) Start read from SD-card\r\n");
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+			fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
+			if (fres == FR_OK)
+			{
+				sprintf(DataChar,"6) read from SD OK\r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+					char buff[200];
+					LCD_SetCursor(0, 0);
+					LCD_FillScreen(BLACK);
+					/* Read from file */
+					while (f_gets(buff, 200, &USERFile))
+					{
+						LCD_Printf(buff);
+						sprintf(DataChar,"%s\r\n", buff);
+						HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+					}
+						/* Close file */
+						f_close(&USERFile);
+			}
+			else
+			{
+				sprintf(DataChar,"6) read from SD FAILED\r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			}
+
+			sprintf(DataChar,"7) END read from SD.\r\n");
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+			time_read_from_SD_u8 = 0;
+		}
 
     /* USER CODE END WHILE */
 
