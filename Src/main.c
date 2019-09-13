@@ -21,6 +21,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "fatfs.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -52,14 +54,6 @@
 
 /* USER CODE BEGIN PV */
 
-	extern DMA_HandleTypeDef hdma_usart3_rx;
-	RingBuffer_DMA rx_buffer;
-	#define RX_BUFFER_SIZE 100
-
-	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
-	char cmd[500];
-	int iCmd = 0;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +65,17 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+	extern DMA_HandleTypeDef hdma_usart3_rx;
+	RingBuffer_DMA rx_buffer;
+	#define RX_BUFFER_SIZE 100
+	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
+	char cmd[500];
+	int iCmd = 0;
+
+	volatile uint8_t time_read_from_SD_u8 = 0;
+
+	uint32_t index_u32 = 0;
+
 /* USER CODE END 0 */
 
 /**
@@ -80,6 +85,8 @@ void SystemClock_Config(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+
+	FRESULT fres;
 
   /* USER CODE END 1 */
   
@@ -104,29 +111,50 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART3_UART_Init();
+  MX_SPI1_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
 	LCD_Init();
-	LCD_SetRotation(1);
+	LCD_SetRotation(0);
 	LCD_FillScreen(BLACK);
 	LCD_SetTextColor(GREEN, BLACK);
-	LCD_Printf("\n NAU_Rocket Find_It 2019 v0.1.0\n ");
+	LCD_Printf("\n NAU_Rocket Find_It 2019 v1.0.0\n ");
 
 	char DataChar[100];
-	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v0.1.0\r\nUART1 for debug started on speed 115200\r\n");
+	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v1.0.0\r\nUART1 for debug started on speed 9600\r\n");
 	HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
 	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
   	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
   	uint32_t rx_count;
 
+	/* Initialize SD Card low level SPI driver */
+  	FATFS_SPI_Init(&hspi1);
+	/* Mount SDCARD */
+	if (f_mount(&USERFatFS, "", 1) != FR_OK) {
+		/* Unmount SDCARD */
+		f_mount(NULL, "", 0);
+		Error_Handler();
+
+		sprintf(DataChar,"1) f_mount = Failed \r\n");
+		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+	}
+	else
+	{
+		sprintf(DataChar,"1) f_mount = FR_OK \r\n");
+		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+	}
+
+	LCD_FillScreen(BLACK);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
-	HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 	rx_count = RingBuffer_DMA_Count(&rx_buffer);
 
 	while (rx_count--)
@@ -136,24 +164,100 @@ int main(void)
 		{
 			cmd[iCmd++] = 0; // we received whole command, setting end of string
 			iCmd = 0;
-			LCD_Printf("%s\n", cmd);
+			//LCD_Printf("%s\n", cmd);
 			sprintf(DataChar,"%s\r\n", cmd);
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-			//if ((cmd[0]=='l')&& (cmd[1]=='e')&&(cmd[2]=='d')) LCD_Printf(text);
-			// react to command here
-			//if (strcmp(cmd,"adc")==0) LCD_Printf("U=3.3v\n");
+
+			LCD_SetCursor(0, 0);
+			uint32_t cmd_size_u32 = strlen(cmd);
+			for (uint32_t i=0; i<cmd_size_u32; i++)
+			{
+				if (cmd[i] == ',') LCD_Printf("\n");
+				else LCD_Printf("%c",cmd[i]);
+			}
+
+			index_u32++;
+			if (index_u32%2 == 0)
+			{
+				fres = f_open(&USERFile, "A0.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+				if (fres == FR_OK)
+				{
+					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
+					f_close(&USERFile);	/* Close file */
+					sprintf(DataChar,"Write_A0 OK \r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+				else
+				{
+					sprintf(DataChar,"Write_A0 FAILED \r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+			}
+			else	//	if (index_u32%2 == 0)
+			{
+				fres = f_open(&USERFile, "B1.txt", FA_OPEN_APPEND | FA_WRITE);	/* Try to open file */
+				if (fres == FR_OK)
+				{
+					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
+					f_close(&USERFile);	/* Close file */
+
+					sprintf(DataChar,"Write_B1 OK\r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+				else
+				{
+					sprintf(DataChar,"Write_B1 FAILED \r\n");
+					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				}
+			}	// end if (index_u32%2 == 0)
 		}
 		else if (c == '\r')
 		{
 			//  skip \r  }
 		}
 		else {cmd[iCmd++ % 500] = c;}
-	} // end while
+	} // end while rx_count
+
+	if (time_read_from_SD_u8 == 1)
+		{
+			sprintf(DataChar,"5) Start read from SD-card\r\n");
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+			fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
+			if (fres == FR_OK)
+			{
+				sprintf(DataChar,"6) read from SD OK\r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+					char buff[200];
+					LCD_SetCursor(0, 0);
+					LCD_FillScreen(BLACK);
+					/* Read from file */
+					while (f_gets(buff, 200, &USERFile))
+					{
+						LCD_Printf(buff);
+						sprintf(DataChar,"%s\r\n", buff);
+						HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+					}
+						/* Close file */
+						f_close(&USERFile);
+			}
+			else
+			{
+				sprintf(DataChar,"6) read from SD FAILED\r\n");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			}
+
+			sprintf(DataChar,"7) END read from SD.\r\n");
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+
+			time_read_from_SD_u8 = 0;
+		}
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+  }	// end main while
   /* USER CODE END 3 */
 }
 
