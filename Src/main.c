@@ -172,7 +172,6 @@ int main(void)
 			sprintf(DataChar,"%s", cmd);
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
-			//LCD_FillScreen(BLACK);
 			LCD_SetCursor(0, 0);
 			uint32_t cmd_size_u32 = strlen(cmd);
 			for (uint32_t i=0; i<cmd_size_u32; i++)
@@ -180,7 +179,7 @@ int main(void)
 				if (cmd[i] == ',') LCD_Printf("\n");
 				else LCD_Printf("%c",cmd[i]);
 			}
-			LCD_Printf("\n");
+			//	LCD_Printf("\n");
 
 				// CountCheckSum
 			uint8_t check_sum_u8 = cmd[1];
@@ -188,76 +187,65 @@ int main(void)
 			{
 				check_sum_u8 ^= cmd[i];
 			}
-			sprintf(DataChar," (%X)\r\n", check_sum_u8);
+			sprintf(DataChar," (%X", check_sum_u8);
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-			LCD_Printf(" %X - CheckSum\n", check_sum_u8);
+			LCD_Printf(" (%X/", check_sum_u8);
 
-			uint8_t check_sum_2_u8 = ((cmd[cmd_size_u32-2]-0x30)<<4) + (cmd[cmd_size_u32-1]-0x30);
-			LCD_Printf(" %X - CheckSum 2\n", check_sum_2_u8);
-			LCD_Printf(" %d - packet size\n\n", cmd_size_u32);
+			uint8_t cs_calc_u8 = 0;
+			if (cmd[cmd_size_u32-2] <= 0x39)
+			{
+				cs_calc_u8 = ((cmd[cmd_size_u32-2] - 0x30        )<<4);
+			}
+			else
+			{
+				cs_calc_u8 = ((cmd[cmd_size_u32-2] - 0x41 + 0x0A )<<4) ;
+			}
 
-			char my_file_name[100];
-			char my_file_name_1[100];
-			char my_file_name_2[100];
-			my_file_name[0] = 'C';
-			my_file_name[1] = '3';
-			my_file_name[2] = '4';
-			my_file_name[3] = '.';
-			my_file_name[4] = 't';
-			my_file_name[5] = 'x';
-			my_file_name[6] = 't';
-			my_file_name[7] = '\n';
+			if (cmd[cmd_size_u32-1] <= 0x39)
+				{
+					cs_calc_u8 = cs_calc_u8 + (cmd[cmd_size_u32-1] - 0x30 ) ;
+				}
+				else
+				{
+					cs_calc_u8 = cs_calc_u8 + (cmd[cmd_size_u32-1] - 0x41 +0x0A) ;
+				}
 
+			sprintf(DataChar,"/%X)\r\n", cs_calc_u8);
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			LCD_Printf("%X)\n", cs_calc_u8);
 
-			for (int i =0; i<100; i++)
+			LCD_Printf("Packet size %d\n\n", cmd_size_u32);
+
+			char my_file_name_1[15];
+			char my_file_name_2[15];
+
+			for (int i=0; i<15; i++)
 			{
 				my_file_name_1[i] = 0x00;
 				my_file_name_2[i] = 0x00;
 			}
 			memcpy(my_file_name_1, &cmd[7], 6);
-			LCD_Printf("%s\n",my_file_name_1);
-			sprintf(my_file_name_2,"T_%s.txt", my_file_name_1);
-			LCD_Printf("%s\n",my_file_name_2);
-
-			//snprintf(my_file_name_rez, 11, "%s%s", my_file_name, second);
+			//LCD_Printf("%s\n",my_file_name_1);
+			sprintf(my_file_name_2,"%s.txt", my_file_name_1);
+			LCD_Printf("file_name: %s\n",my_file_name_2);
 
 				//	write to first file
-			//fres = f_open(&USERFile, "A0.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
 			fres = f_open(&USERFile, my_file_name_2, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
 			if (fres == FR_OK)
 			{
 				f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
 				f_close(&USERFile);	/* Close file */
-				sprintf(DataChar,"Write_to_A0 - OK \r\n");
+				sprintf(DataChar,"Write_to_SD - OK \r\n");
 				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 				LCD_Printf("%s",DataChar);
 			}
 			else
 			{
-				sprintf(DataChar,"Write_to_A0 FAILED \r\n");
+				sprintf(DataChar,"Write_to_SD FAILED \r\n");
 				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 				LCD_Printf("%s",DataChar);
 			}
 
-			HAL_Delay(10);
-
-				//	write to second file
-			fres = f_open(&USERFile, "B1.txt", FA_OPEN_APPEND | FA_WRITE);	/* Try to open file */
-			if (fres == FR_OK)
-			{
-				f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
-				f_close(&USERFile);	/* Close file */
-
-				sprintf(DataChar,"Write_to_B1 - OK\r\n");
-				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				LCD_Printf("%s",DataChar);
-			}
-			else
-			{
-				sprintf(DataChar,"Write_to_B1 FAILED \r\n");
-				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				LCD_Printf("%s",DataChar);
-			}
 				//	end write to file
 		}
 		else if (c == '\r')
