@@ -29,6 +29,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+	#include <stdio.h>
 	#include <string.h>
 	#include "lcd.h"
 	#include "ringbuffer_dma.h"
@@ -60,6 +61,8 @@
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
+	uint8_t _char_to_uint8 (uint8_t char_1, uint8_t char_0);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -73,8 +76,11 @@ void SystemClock_Config(void);
 	int iCmd = 0;
 
 	volatile uint8_t time_read_from_SD_u8 = 0;
-
-	uint32_t index_u32 = 0;
+	uint32_t circle_u32 = 0;
+	uint8_t first_circle_u8 = 1;
+	uint32_t file_name_hour_u32 = 0;
+	uint32_t file_name_minutes_u32 = 0;
+	uint32_t file_name_seconds_u32 = 0;
 
 /* USER CODE END 0 */
 
@@ -116,14 +122,18 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 	LCD_Init();
-	LCD_SetRotation(0);
-	LCD_FillScreen(BLACK);
-	LCD_SetTextColor(GREEN, BLACK);
-	LCD_Printf("\n NAU_Rocket Find_It 2019 v1.0.0\n ");
+	LCD_SetRotation(1);
+	//	LCD_FillScreen(BLACK);
+	LCD_FillScreen(0x0000);
+	//	LCD_SetTextColor(GREEN, BLACK);
+	LCD_SetTextColor(0x07E0, 0x0000);
+	//LCD_SetTextSize(20);
+	//LCD_SetTextWrap(15);
 
 	char DataChar[100];
-	sprintf(DataChar,"\r\n NAU_Rocket Find_It 2019 v1.0.0\r\nUART1 for debug started on speed 9600\r\n");
+	sprintf(DataChar,"\r\nNAU_Rocket Find_It\r\n2019 v1.0.0\r\nfor_debug UART3 9600/8-N-1\r\n");
 	HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+	LCD_Printf("%s",DataChar);
 
 	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
   	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
@@ -137,16 +147,19 @@ int main(void)
 		f_mount(NULL, "", 0);
 		Error_Handler();
 
-		sprintf(DataChar,"1) f_mount = Failed \r\n");
+		sprintf(DataChar,"\r\nSD-card_mount  Failed \r\n");
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+		LCD_Printf("%s",DataChar);
 	}
 	else
 	{
-		sprintf(DataChar,"1) f_mount = FR_OK \r\n");
+		sprintf(DataChar,"\r\nSD-card_mount - OK \r\n");
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+		LCD_Printf("%s",DataChar);
 	}
+	HAL_Delay(3000);
 
-	LCD_FillScreen(BLACK);
+	LCD_FillScreen(0x0000);
 
   /* USER CODE END 2 */
 
@@ -164,52 +177,124 @@ int main(void)
 		{
 			cmd[iCmd++] = 0; // we received whole command, setting end of string
 			iCmd = 0;
-			//LCD_Printf("%s\n", cmd);
-			sprintf(DataChar,"%s\r\n", cmd);
+
+			sprintf(DataChar,"%s", cmd);
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
-			LCD_SetCursor(0, 0);
+			circle_u32++;
+			LCD_SetCursor(0, 70*(circle_u32%3));
+
 			uint32_t cmd_size_u32 = strlen(cmd);
-			for (uint32_t i=0; i<cmd_size_u32; i++)
+
+			#define PARCE_BY_COMMA 	0
+			#if (PARCE_BY_COMMA == 1)
 			{
-				if (cmd[i] == ',') LCD_Printf("\n");
-				else LCD_Printf("%c",cmd[i]);
+				for (uint32_t i=0; i<cmd_size_u32; i++)
+				{
+					if (cmd[i] == ',') LCD_Printf("\n");
+					else LCD_Printf("%c",cmd[i]);
+				}
+			}
+			#else
+			{
+				LCD_Printf("%s", cmd);
+			}
+			#endif
+			//	LCD_Printf("\n");
+
+				// CountCheckSum
+			uint8_t check_sum_u8 = cmd[1];
+			for (uint32_t i=2; i<(cmd_size_u32-3); i++)
+			{
+				check_sum_u8 ^= cmd[i];
+			}
+			sprintf(DataChar," (%X", check_sum_u8);
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			//	LCD_Printf(" (%X/", check_sum_u8);
+
+			uint8_t cs_calc_u8 = _char_to_uint8 (cmd[cmd_size_u32-2], cmd[cmd_size_u32-1]);
+
+			sprintf(DataChar,"/%X)\r\n", cs_calc_u8);
+			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+			//	LCD_Printf("%X)\n", cs_calc_u8);
+
+			//	LCD_Printf("Packet size %d\n\n", cmd_size_u32);
+
+
+			if ((check_sum_u8 == cs_calc_u8) && (first_circle_u8 == 1))
+			{
+				sprintf(DataChar,"cs-Ok");
+				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				first_circle_u8 = 0;
+
+				char my_file_name_10[5];
+
+				for (int i=0; i<5; i++)
+				{
+					my_file_name_10[i] = 0x00;
+				}
+				memcpy(my_file_name_10, &cmd[7], 2);
+				file_name_hour_u32 = 3 + atoi(my_file_name_10);
+
+				memcpy(my_file_name_10, &cmd[9], 2);
+				file_name_minutes_u32 = atoi(my_file_name_10);
+
+				memcpy(my_file_name_10, &cmd[11], 2);
+				file_name_seconds_u32 = 1 + atoi(my_file_name_10);
+			}
+			else
+			{
+				if (file_name_seconds_u32 < 59)
+				{
+					file_name_seconds_u32++;
+				}
+				else
+				{
+					file_name_seconds_u32 = 0;
+					if (file_name_minutes_u32 < 59)
+					{
+						file_name_minutes_u32++;
+					}
+					else
+					{
+						file_name_minutes_u32 = 0;
+						file_name_hour_u32++;
+					}
+				}
+
 			}
 
-			index_u32++;
-			if (index_u32%2 == 0)
+			char current_file_name_char[15];
+			for (int i=0; i<15; i++)
 			{
-				fres = f_open(&USERFile, "A0.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+				current_file_name_char[i] = 0x00;
+			}
+
+			int file_name_int = file_name_hour_u32*10000 + file_name_minutes_u32*100 + file_name_seconds_u32;
+			sprintf(current_file_name_char,"%06d.txt ", file_name_int);
+			//	LCD_Printf("file_name: %s\n",current_file_name_char);
+			//HAL_UART_Transmit(&huart3, (uint8_t *)current_file_name_char, strlen(current_file_name_char), 100);
+
+				//	write to first file
+			if (first_circle_u8 != 1)
+			{
+				//fres = f_open(&USERFile, current_file_name_char, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+				fres = f_open(&USERFile, "NAUR_02.TXT", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
 				if (fres == FR_OK)
 				{
 					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
 					f_close(&USERFile);	/* Close file */
-					sprintf(DataChar,"Write_A0 OK \r\n");
+					sprintf(DataChar,"Write_to_SD - OK \r\n");
 					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+					//	LCD_Printf("%s",DataChar);
 				}
 				else
 				{
-					sprintf(DataChar,"Write_A0 FAILED \r\n");
+					sprintf(DataChar,"Write_to_SD FAILED \r\n");
 					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+					//	LCD_Printf("%s",DataChar);
 				}
-			}
-			else	//	if (index_u32%2 == 0)
-			{
-				fres = f_open(&USERFile, "B1.txt", FA_OPEN_APPEND | FA_WRITE);	/* Try to open file */
-				if (fres == FR_OK)
-				{
-					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
-					f_close(&USERFile);	/* Close file */
-
-					sprintf(DataChar,"Write_B1 OK\r\n");
-					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				}
-				else
-				{
-					sprintf(DataChar,"Write_B1 FAILED \r\n");
-					HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-				}
-			}	// end if (index_u32%2 == 0)
+			}	//	end write to file
 		}
 		else if (c == '\r')
 		{
@@ -231,7 +316,7 @@ int main(void)
 
 					char buff[200];
 					LCD_SetCursor(0, 0);
-					LCD_FillScreen(BLACK);
+					LCD_FillScreen(0x0000);
 					/* Read from file */
 					while (f_gets(buff, 200, &USERFile))
 					{
@@ -313,6 +398,29 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+uint8_t _char_to_uint8 (uint8_t char_1, uint8_t char_0)
+{
+	uint8_t result_u8 = 0;
+
+	if (char_1 <= 0x39)
+	{
+		result_u8 = ((char_1 - 0x30        )<<4);
+	}
+	else
+	{
+		result_u8 = ((char_1 - 0x41 + 0x0A )<<4) ;
+	}
+
+	if (char_0 <= 0x39)
+	{
+		result_u8 = result_u8 + (char_0 - 0x30 ) ;
+	}
+	else
+	{
+		result_u8 = result_u8 + (char_0 - 0x41 +0x0A) ;
+	}
+return result_u8;
+}
 /* USER CODE END 4 */
 
 /**
