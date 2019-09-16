@@ -234,24 +234,24 @@ int main(void)
 					my_file_name_10[i] = 0x00;
 				}
 				memcpy(my_file_name_10, &cmd[7], 2);
-				file_name_hour_u32 = atoi(my_file_name_10);
+				file_name_hour_u32 = 3 + atoi(my_file_name_10);
 
 				memcpy(my_file_name_10, &cmd[9], 2);
 				file_name_minutes_u32 = atoi(my_file_name_10);
 
 				memcpy(my_file_name_10, &cmd[11], 2);
-				file_name_seconds_u32 = atoi(my_file_name_10);
+				file_name_seconds_u32 = 1 + atoi(my_file_name_10);
 			}
 			else
 			{
-				if (file_name_seconds_u32 <60)
+				if (file_name_seconds_u32 < 59)
 				{
 					file_name_seconds_u32++;
 				}
 				else
 				{
 					file_name_seconds_u32 = 0;
-					if (file_name_minutes_u32 < 60)
+					if (file_name_minutes_u32 < 59)
 					{
 						file_name_minutes_u32++;
 					}
@@ -273,12 +273,13 @@ int main(void)
 			int file_name_int = file_name_hour_u32*10000 + file_name_minutes_u32*100 + file_name_seconds_u32;
 			sprintf(current_file_name_char,"%06d.txt ", file_name_int);
 			//	LCD_Printf("file_name: %s\n",current_file_name_char);
-			HAL_UART_Transmit(&huart3, (uint8_t *)current_file_name_char, strlen(current_file_name_char), 100);
+			//HAL_UART_Transmit(&huart3, (uint8_t *)current_file_name_char, strlen(current_file_name_char), 100);
 
 				//	write to first file
 			if (first_circle_u8 != 1)
 			{
-				fres = f_open(&USERFile, current_file_name_char, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+				//fres = f_open(&USERFile, current_file_name_char, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+				fres = f_open(&USERFile, "NAUR_02.TXT", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
 				if (fres == FR_OK)
 				{
 					f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
