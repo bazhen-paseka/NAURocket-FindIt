@@ -68,15 +68,15 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+	//	volatile uint8_t time_read_from_SD_u8 = 0;
+	volatile uint8_t time_write_to_SD_correct_flag = 0;
+
 	extern DMA_HandleTypeDef hdma_usart3_rx;
 	RingBuffer_DMA rx_buffer;
 	#define RX_BUFFER_SIZE 100
 	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
 	char cmd[500];
 	int iCmd = 0;
-
-	volatile uint8_t time_read_from_SD_u8 = 0;
-	volatile uint8_t time_write_to_SD_u8 = 0;
 
 	uint32_t circle_u32 = 0;
 	uint8_t first_circle_u8 = 1;
@@ -190,7 +190,7 @@ int main(void)
 		uint8_t c = RingBuffer_DMA_GetByte(&rx_buffer);
 		if (c == '\n')
 		{
-			time_write_to_SD_u8 = 1;
+			time_write_to_SD_correct_flag = 1;
 		}
 		else if (c == '\r')
 		{
@@ -199,20 +199,20 @@ int main(void)
 		else {cmd[iCmd++ % 500] = c;}
 	} // end while rx_count
 
-	if (time_write_to_SD_u8 == 1)
+	if (time_write_to_SD_correct_flag == 1)
 	{
-		cmd[iCmd++] = '\r' ;
-		cmd[iCmd++] = '\n' ;
+		//cmd[iCmd++] = '\r' ;
+		//cmd[iCmd++] = '\n' ;
 
 		int cmd_size_int = strlen(cmd);
 
 		cmd[iCmd++] = 0; // we received whole command, setting end of string
 		iCmd = 0;
-		sprintf(DataChar,"%s (L:%d)", cmd, cmd_size_int);
+		sprintf(DataChar,"%s", cmd);
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
 		circle_u32++;
-		LCD_SetCursor(0, 70*(circle_u32%3));
+		LCD_SetCursor(0, 120*(circle_u32%2));
 
 		#define PARCE_BY_COMMA 	0
 		#if (PARCE_BY_COMMA == 1)
@@ -225,29 +225,22 @@ int main(void)
 		}
 		#else
 		{
-			LCD_Printf("%s (L=%d)", cmd, cmd_size_int);
+			LCD_Printf("%s", cmd);
 		}
 		#endif
-		//	LCD_Printf("\n");
 
-			// CountCheckSum
+		// CountCheckSum
 		uint8_t check_sum_u8 = cmd[1];
 		for (uint32_t i=2; i<(cmd_size_int-3); i++)
 		{
 			check_sum_u8 ^= cmd[i];
 		}
-		sprintf(DataChar," (%X", check_sum_u8);
-		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-		//	LCD_Printf(" (%X/", check_sum_u8);
 
 		uint8_t cs_calc_u8 = _char_to_uint8 (cmd[cmd_size_int-2], cmd[cmd_size_int-1]);
 
-		sprintf(DataChar,"/%X)\r\n", cs_calc_u8);
+		sprintf(DataChar," (%X/%X L:%d)\r\n", check_sum_u8, cs_calc_u8, cmd_size_int);
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-		//	LCD_Printf("%X)\n", cs_calc_u8);
-
-		//	LCD_Printf("Packet size %d\n\n", cmd_size_u32);
-
+		LCD_Printf(DataChar);
 
 		if ((check_sum_u8 == cs_calc_u8) && (first_circle_u8 == 1))
 		{
@@ -274,7 +267,7 @@ int main(void)
 		{
 			if (file_name_seconds_u32 < 59)
 			{
-				file_name_seconds_u32++;
+				//	file_name_seconds_u32++;
 			}
 			else
 			{
@@ -292,76 +285,77 @@ int main(void)
 
 		}
 
-		char current_file_name_char[15];
-		for (int i=0; i<15; i++)
+		#define FILE_NAME_SIZE 15
+		char current_file_name_char[FILE_NAME_SIZE];
+		for (int i=0; i<FILE_NAME_SIZE; i++)
 		{
 			current_file_name_char[i] = 0x00;
 		}
 
 		int file_name_int = file_name_hour_u32*10000 + file_name_minutes_u32*100 + file_name_seconds_u32;
-		sprintf(current_file_name_char,"%06d.txt ", file_name_int);
-		//	LCD_Printf("file_name: %s\n",current_file_name_char);
-		//HAL_UART_Transmit(&huart3, (uint8_t *)current_file_name_char, strlen(current_file_name_char), 100);
+		sprintf(current_file_name_char,"%06d.txt", file_name_int);
+		LCD_Printf("%s",current_file_name_char);
+		HAL_UART_Transmit(&huart3, (uint8_t *)current_file_name_char, strlen(current_file_name_char), 100);
 
 		//	write to first file
 		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
-		//fres = f_open(&USERFile, current_file_name_char, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
-		fres = f_open(&USERFile, "NAUR_02.TXT", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+
+		fres = f_open(&USERFile, current_file_name_char, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
 		if (fres == FR_OK)
 		{
 			f_printf(&USERFile, "%s\r\n", cmd);	/* Write to file */
 			f_close(&USERFile);	/* Close file */
-			sprintf(DataChar,"Write_to_SD - OK \r\n");
+			sprintf(DataChar," Write_to_SD - OK \r\n");
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 			//	LCD_Printf("%s",DataChar);
 		}
 		else
 		{
-			sprintf(DataChar,"Write_to_SD FAILED \r\n");
+			sprintf(DataChar," Write_to_SD FAILED \r\n");
 			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 			//	LCD_Printf("%s",DataChar);
 		}
 		 HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
 		//	end write to file
 
-		time_write_to_SD_u8 = 0;
+		time_write_to_SD_correct_flag = 0;
 	}
 
-	if (time_read_from_SD_u8 == 1)
-		{
-			sprintf(DataChar,"5) Start read from SD-card\r\n");
-			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-
-			fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
-			if (fres == FR_OK)
-			{
-				sprintf(DataChar,"6) read from SD OK\r\n");
-				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-
-					char buff[200];
-					LCD_SetCursor(0, 0);
-					LCD_FillScreen(0x0000);
-					/* Read from file */
-					while (f_gets(buff, 200, &USERFile))
-					{
-						LCD_Printf(buff);
-						sprintf(DataChar,"%s\r\n", buff);
-						HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-					}
-						/* Close file */
-						f_close(&USERFile);
-			}
-			else
-			{
-				sprintf(DataChar,"6) read from SD FAILED\r\n");
-				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-			}
-
-			sprintf(DataChar,"7) END read from SD.\r\n");
-			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
-
-			time_read_from_SD_u8 = 0;
-		}
+				//	if (time_read_from_SD_u8 == 1)
+				//		{
+				//			sprintf(DataChar,"5) Start read from SD-card\r\n");
+				//			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				//
+				//			fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
+				//			if (fres == FR_OK)
+				//			{
+				//				sprintf(DataChar,"6) read from SD OK\r\n");
+				//				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				//
+				//					char buff[200];
+				//					LCD_SetCursor(0, 0);
+				//					LCD_FillScreen(0x0000);
+				//					/* Read from file */
+				//					while (f_gets(buff, 200, &USERFile))
+				//					{
+				//						LCD_Printf(buff);
+				//						sprintf(DataChar,"%s\r\n", buff);
+				//						HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				//					}
+				//						/* Close file */
+				//						f_close(&USERFile);
+				//			}
+				//			else
+				//			{
+				//				sprintf(DataChar,"6) read from SD FAILED\r\n");
+				//				HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				//			}
+				//
+				//			sprintf(DataChar,"7) END read from SD.\r\n");
+				//			HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
+				//
+				//			time_read_from_SD_u8 = 0;
+				//		}
 
     /* USER CODE END WHILE */
 
