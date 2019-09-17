@@ -68,6 +68,8 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+	volatile uint8_t shudown_button_pressed_flag = 0;
+
 	extern DMA_HandleTypeDef hdma_usart3_rx;
 	RingBuffer_DMA rx_buffer;
 
@@ -138,7 +140,7 @@ int main(void)
 	LCD_SetTextColor(0x07E0, 0x0000);
 
 	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,"\r\n\r\nNAU_Rocket Find_It\r\n2019 v1.1.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"\r\n\r\nNAU_Rocket Find_It\r\n2019 v1.2.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
 
@@ -317,6 +319,27 @@ int main(void)
 		time_write_to_SD_flag  = 0 ;
 	}	//		if (time_write_to_SD_flag == 1)
 	//*****************************************************************************************
+
+	if (shudown_button_pressed_flag == 1)
+	{
+		LCD_FillScreen(0x0000);
+		LCD_SetCursor(0, 0);
+
+		for (int i=5; i>=0; i--)
+		{
+			sprintf(DebugString,"SHUTDOWN %d\r\n", i);
+			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+			LCD_Printf("%s",DebugString);
+			HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
+			HAL_Delay(800);
+			HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
+			HAL_Delay(300);
+		}
+
+		shudown_button_pressed_flag = 0;
+	}
+	//*****************************************************************************************
+
 
 				//	if (time_read_from_SD_u8 == 1)
 				//		{
