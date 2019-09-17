@@ -152,14 +152,26 @@ int main(void)
 		sprintf(DataChar,"\r\nSD-card_mount  Failed \r\n");
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 		LCD_Printf("%s",DataChar);
-		HAL_Delay(5000);
+
+		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
+		HAL_Delay(500);
+		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
+		HAL_Delay(500);
+		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
+		HAL_Delay(500);
+		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
+		HAL_Delay(500);
+		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
+		HAL_Delay(500);
+		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
+		//HAL_Delay(3000);
 	}
 	else
 	{
 		sprintf(DataChar,"\r\nSD-card_mount - OK \r\n");
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 		LCD_Printf("%s",DataChar);
-		HAL_Delay(1000);
+		//HAL_Delay(1000);
 	}
 
 	LCD_FillScreen(0x0000);
@@ -189,15 +201,18 @@ int main(void)
 
 	if (time_write_to_SD_u8 == 1)
 	{
+		cmd[iCmd++] = '\r' ;
+		cmd[iCmd++] = '\n' ;
+
+		int cmd_size_int = strlen(cmd);
+
 		cmd[iCmd++] = 0; // we received whole command, setting end of string
 		iCmd = 0;
-		sprintf(DataChar,"%s", cmd);
+		sprintf(DataChar,"%s (L:%d)", cmd, cmd_size_int);
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 
 		circle_u32++;
 		LCD_SetCursor(0, 70*(circle_u32%3));
-
-		uint32_t cmd_size_u32 = strlen(cmd);
 
 		#define PARCE_BY_COMMA 	0
 		#if (PARCE_BY_COMMA == 1)
@@ -210,14 +225,14 @@ int main(void)
 		}
 		#else
 		{
-			LCD_Printf("%s", cmd);
+			LCD_Printf("%s (L=%d)", cmd, cmd_size_int);
 		}
 		#endif
 		//	LCD_Printf("\n");
 
 			// CountCheckSum
 		uint8_t check_sum_u8 = cmd[1];
-		for (uint32_t i=2; i<(cmd_size_u32-3); i++)
+		for (uint32_t i=2; i<(cmd_size_int-3); i++)
 		{
 			check_sum_u8 ^= cmd[i];
 		}
@@ -225,7 +240,7 @@ int main(void)
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
 		//	LCD_Printf(" (%X/", check_sum_u8);
 
-		uint8_t cs_calc_u8 = _char_to_uint8 (cmd[cmd_size_u32-2], cmd[cmd_size_u32-1]);
+		uint8_t cs_calc_u8 = _char_to_uint8 (cmd[cmd_size_int-2], cmd[cmd_size_int-1]);
 
 		sprintf(DataChar,"/%X)\r\n", cs_calc_u8);
 		HAL_UART_Transmit(&huart3, (uint8_t *)DataChar, strlen(DataChar), 100);
