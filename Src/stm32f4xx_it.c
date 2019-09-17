@@ -28,9 +28,6 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
 
-	//	extern uint8_t time_read_from_SD_u8;
-	//	extern uint8_t time_write_to_SD_flag;
-
 /* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
