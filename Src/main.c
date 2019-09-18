@@ -23,6 +23,7 @@
 #include "dma.h"
 #include "fatfs.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -73,18 +74,18 @@ void SystemClock_Config(void);
 	extern DMA_HandleTypeDef hdma_usart3_rx;
 	RingBuffer_DMA rx_buffer;
 
-	#define RX_BUFFER_SIZE 100
+	#define RX_BUFFER_SIZE 250
 	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
 
-	#define	GPS_DATA_SIZE	250
+	#define	GPS_DATA_SIZE	650
 	char GPSdata_string[GPS_DATA_SIZE];
 	int GPSdata_length_int = 0;
 
-	#define MAX_CHAR_IN_GPS_DATA	80
+	#define MAX_CHAR_IN_GPS_DATA	630
 	#define	TIMEZONE				3
-	#define	DEBUG_STRING_SIZE		200
+	#define	DEBUG_STRING_SIZE		650
 
-	 uint8_t time_write_to_SD_flag	= 0;
+	volatile uint8_t time_write_to_SD_flag	= 0;
 	 uint8_t first_circle_flag 		= 1;
 	uint32_t circle_u32 			= 0;
 
@@ -129,6 +130,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_SPI1_Init();
   MX_FATFS_Init();
+  MX_TIM3_Init();
   MX_UART5_Init();
   /* USER CODE BEGIN 2 */
 
@@ -140,7 +142,7 @@ int main(void)
 	LCD_SetTextColor(0x07E0, 0x0000);
 
 	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,"\r\n\r\nNAU_Rocket Find_It\r\n2019 v1.2.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"\r\n\r\nNAU_Rocket Find_It\r\n2019 v200\r\nfor_debug UART5 115200/8-N-1\r\n");
 	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
 
@@ -159,17 +161,6 @@ int main(void)
 		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
 
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
-		HAL_Delay(500);
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
-		HAL_Delay(500);
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
-		HAL_Delay(500);
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
-		HAL_Delay(500);
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
-		HAL_Delay(500);
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
 	}
 	else
 	{
@@ -179,6 +170,10 @@ int main(void)
 	}
 
 	LCD_FillScreen(0x0000);
+	HAL_TIM_Base_Start_IT(&htim3);
+	HAL_TIM_Base_Start(&htim3);
+	//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
+
 
   /* USER CODE END 2 */
 
@@ -189,135 +184,148 @@ int main(void)
   {
 	rx_count = RingBuffer_DMA_Count(&rx_buffer);
 
-	while (rx_count--)
+	while ((rx_count--) && (time_write_to_SD_flag == 0))
 	{
 		uint8_t current_GPS_char = RingBuffer_DMA_GetByte(&rx_buffer);
-		if (current_GPS_char == '\n')
-		{
-			time_write_to_SD_flag = 1;
-		}
-		else if (GPSdata_length_int > MAX_CHAR_IN_GPS_DATA)
+		if (GPSdata_length_int > MAX_CHAR_IN_GPS_DATA)
 		{
 			GPSdata_string[GPSdata_length_int++] = '\r' ;
 			GPSdata_string[GPSdata_length_int++] = '\n' ;
 			time_write_to_SD_flag = 1;
 		}
-		else if (current_GPS_char == '\r')
+		else
 		{
-			//  skip \r  }
+			GPSdata_string[GPSdata_length_int++ % MAX_CHAR_IN_GPS_DATA] = current_GPS_char;
 		}
-		else {GPSdata_string[GPSdata_length_int++ % GPS_DATA_SIZE] = current_GPS_char;}
 	} // end while rx_count
 	//***********************************************************
 
 	if (time_write_to_SD_flag == 1)
 	{
-		int current_GPSstring_size_int = strlen(GPSdata_string);
-
-		GPSdata_string[GPSdata_length_int++] = 0; // we received whole command, setting end of string
-		GPSdata_length_int = 0;
-		sprintf(DebugString,"%s", GPSdata_string);
-		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-
-		circle_u32++;
-		LCD_SetCursor(0, 70*(circle_u32%2));
-		LCD_Printf("%s", GPSdata_string);
-
-		// CountCheckSum
-		uint8_t check_sum_calc_u8 = GPSdata_string[1];
-		for (uint32_t i=2; i<(current_GPSstring_size_int-3); i++)
+		if (GPSdata_length_int > 350)
 		{
-			check_sum_calc_u8 ^= GPSdata_string[i];
-		}
+			HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
+			HAL_TIM_Base_Stop_IT(&htim3);
+			HAL_TIM_Base_Stop(&htim3);
 
-		uint8_t check_sum_glue_u8 = _char_to_uint8 (GPSdata_string[current_GPSstring_size_int-2], GPSdata_string[current_GPSstring_size_int-1]);
+			int current_GPSstring_size_int = strlen(GPSdata_string);
 
-		sprintf(DebugString," %X %d\r\n", check_sum_calc_u8, current_GPSstring_size_int);
-		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-		//LCD_Printf(DebugString);
-
-		uint8_t check_sum_status_flag = 0;
-		if (check_sum_calc_u8 == check_sum_glue_u8)
-		{
-			check_sum_status_flag = 1;
-		}
-
-		if ((check_sum_status_flag == 1) && (first_circle_flag == 1))
-		{
-			sprintf(DebugString,"\r\nCheckSum - Ok\r\n");
+			GPSdata_string[GPSdata_length_int++] = 0; // we received whole command, setting end of string
+			GPSdata_length_int = 0;
+			sprintf(DebugString,"receive: %d\r\n", current_GPSstring_size_int);
 			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-			first_circle_flag = 0;
+			LCD_Printf("%s", DebugString);
 
-			#define TMP_TIME_FILENAME_SIZE	5
-			char tmp_time_filename_string[TMP_TIME_FILENAME_SIZE];
+			sprintf(DebugString,"%s\r\n", GPSdata_string);
+			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-			for (int i=0; i<TMP_TIME_FILENAME_SIZE; i++)
+			circle_u32++;
+			//LCD_SetCursor(0, 0);
+
+
+			// CountCheckSum
+			uint8_t check_sum_calc_u8 = GPSdata_string[1];
+			for (uint32_t i=2; i<(current_GPSstring_size_int-3); i++)
 			{
-				tmp_time_filename_string[i] = 0x00;
+				check_sum_calc_u8 ^= GPSdata_string[i];
 			}
-			memcpy(tmp_time_filename_string, &GPSdata_string[7], 2);
-			file_name_hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
 
-			memcpy(tmp_time_filename_string, &GPSdata_string[9], 2);
-			file_name_minutes_int = atoi(tmp_time_filename_string);
+			uint8_t check_sum_glue_u8 = _char_to_uint8 (GPSdata_string[current_GPSstring_size_int-2], GPSdata_string[current_GPSstring_size_int-1]);
 
-			memcpy(tmp_time_filename_string, &GPSdata_string[11], 2);
-			file_name_seconds_int = atoi(tmp_time_filename_string);
-		}
-		else
-		{
-			if (file_name_seconds_int < 59)
+			//sprintf(DebugString," %X %d\r\n", check_sum_calc_u8, current_GPSstring_size_int);
+			//HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+			//LCD_Printf(DebugString);
+
+			uint8_t check_sum_status_flag = 0;
+			if (check_sum_calc_u8 == check_sum_glue_u8)
 			{
-				//	file_name_seconds_int++;
+				check_sum_status_flag = 1;
+			}
+
+			if ((check_sum_status_flag == 1) && (first_circle_flag == 1))
+			{
+				sprintf(DebugString,"\r\nCheckSum - Ok\r\n");
+				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+				first_circle_flag = 0;
+
+				#define TMP_TIME_FILENAME_SIZE	5
+				char tmp_time_filename_string[TMP_TIME_FILENAME_SIZE];
+
+				for (int i=0; i<TMP_TIME_FILENAME_SIZE; i++)
+				{
+					tmp_time_filename_string[i] = 0x00;
+				}
+				memcpy(tmp_time_filename_string, &GPSdata_string[7], 2);
+				file_name_hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
+
+				memcpy(tmp_time_filename_string, &GPSdata_string[9], 2);
+				file_name_minutes_int = atoi(tmp_time_filename_string);
+
+				memcpy(tmp_time_filename_string, &GPSdata_string[11], 2);
+				file_name_seconds_int = atoi(tmp_time_filename_string);
 			}
 			else
 			{
-				file_name_seconds_int = 0;
-				if (file_name_minutes_int < 59)
+				if (file_name_seconds_int < 59)
 				{
-					file_name_minutes_int++;
+					//	file_name_seconds_int++;
 				}
 				else
 				{
-					file_name_minutes_int = 0;
-					file_name_hour_int++;
+					file_name_seconds_int = 0;
+					if (file_name_minutes_int < 59)
+					{
+						file_name_minutes_int++;
+					}
+					else
+					{
+						file_name_minutes_int = 0;
+						file_name_hour_int++;
+					}
 				}
+
 			}
 
-		}
+			#define FILE_NAME_SIZE 15
+			char current_file_name_char[FILE_NAME_SIZE];
 
-		#define FILE_NAME_SIZE 15
-		char current_file_name_char[FILE_NAME_SIZE];
+			int file_name_int = file_name_hour_int*10000 + file_name_minutes_int*100 + file_name_seconds_int;
+			//sprintf(current_file_name_char,"%06d_%d.txt", file_name_int, (int)check_sum_status_flag);
+			//LCD_Printf("%s",current_file_name_char);
+			//sprintf(DebugString,"\r\n fn:%s\r\n", current_file_name_char);
+			//HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-		int file_name_int = file_name_hour_int*10000 + file_name_minutes_int*100 + file_name_seconds_int;
-		sprintf(current_file_name_char,"%06d_%d.txt", file_name_int, (int)check_sum_status_flag);
-		//LCD_Printf("%s",current_file_name_char);
-		sprintf(DebugString,"\r\n fn:%s\r\n", current_file_name_char);
-		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+			//	write to first file
+//			HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
+//
+//			fres = f_open(&USERFile, "a131b.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+//			if (fres == FR_OK)
+//			{
+//				f_printf(&USERFile, "%s\r\n", GPSdata_string);	/* Write to file */
+//				f_close(&USERFile);	/* Close file */
+//				sprintf(DebugString," write_to_SD - OK \r\n");
+//				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+//				//	LCD_Printf("%s",DebugString);
+//			}
+//			else
+//			{
+//				sprintf(DebugString," write_to_SD - FAILED \r\n");
+//				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+//				//	LCD_Printf("%s",DebugString);
+//			}
+//			 HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
+			//	end write to file
+			//HAL_Delay(40);
 
-		//	write to first file
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
-
-		fres = f_open(&USERFile, current_file_name_char, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
-		if (fres == FR_OK)
-		{
-			f_printf(&USERFile, "%s\r\n", GPSdata_string);	/* Write to file */
-			f_close(&USERFile);	/* Close file */
-			sprintf(DebugString," write_to_SD - OK \r\n");
-			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-			//	LCD_Printf("%s",DebugString);
-		}
-		else
-		{
-			sprintf(DebugString," write_to_SD - FAILED \r\n");
-			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-			//	LCD_Printf("%s",DebugString);
-		}
-		 HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
-		//	end write to file
-
+			TIM3->CNT = 0;
+			HAL_TIM_Base_Start(&htim3);
+			HAL_TIM_Base_Start_IT(&htim3);
+			HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_RESET);
+			GPSdata_length_int = 0;
+		}	//			if (GPSdata_length_int > 50)
 		time_write_to_SD_flag  = 0 ;
 	}	//		if (time_write_to_SD_flag == 1)
+
 	//*****************************************************************************************
 
 	if (shudown_button_pressed_flag == 1)
