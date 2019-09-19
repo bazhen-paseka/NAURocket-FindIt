@@ -45,7 +45,13 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-	#define GPGGA_STRING_SIZE 99
+	#define RX_BUFFER_SIZE 			550
+	#define GPGGA_STRING_SIZE 		99
+	#define	GPS_DATA_SIZE			650
+	#define MAX_CHAR_IN_GPS_DATA	630
+	#define	TIMEZONE				3
+	#define	DEBUG_STRING_SIZE		650
+	#define FILE_NAME_SIZE 			25
 
 /* USER CODE END PD */
 
@@ -76,24 +82,18 @@ void SystemClock_Config(void);
 	extern DMA_HandleTypeDef hdma_usart3_rx;
 	RingBuffer_DMA rx_buffer;
 
-	#define RX_BUFFER_SIZE 450
 	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
 
-	#define	GPS_DATA_SIZE	650
 	char GPSdata_string[GPS_DATA_SIZE];
 	int GPSdata_length_int = 0;
-
-	#define MAX_CHAR_IN_GPS_DATA	630
-	#define	TIMEZONE				3
-	#define	DEBUG_STRING_SIZE		650
 
 	volatile uint8_t time_write_to_SD_flag	= 0;
 	 uint8_t first_circle_flag 		= 1;
 	uint32_t circle_u32 			= 0;
 
-	int file_name_hour_int			= 2 ;
-	int file_name_minutes_int		= 2 ;
-	int file_name_seconds_int		= 2 ;
+	int file_name_hour_int			= 0 ;
+	int file_name_minutes_int		= 0 ;
+	int file_name_seconds_int		= 0 ;
 
 	uint32_t GGA_string_start_u32 = 0;
 	uint32_t GGA_string_end_u32 = 0;
@@ -159,9 +159,9 @@ int main(void)
 
   	FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
 	/* Mount SDCARD */
-	if (f_mount(&USERFatFS, "", 1) != FR_OK) {
+	if (f_mount(&USERFatFS, "0:", 1) != FR_OK) {
 		/* Unmount SDCARD */
-		f_mount(NULL, "", 0);
+		f_mount(NULL, "0:", 0);
 		Error_Handler();
 
 		sprintf(DebugString,"\r\nSD-card_mount  Failed \r\n");
@@ -248,27 +248,20 @@ int main(void)
 				check_sum_glue_u8 = _char_to_uint8 (GPGGA_string[GPGGA_string_size_u32 - 4], GPGGA_string[GPGGA_string_size_u32 - 3]);
 
 				check_sum_calc_u8 = GPGGA_string[1];
-				for (int i=2; i<(GPGGA_string_size_u32 - 5); i++)	// 5
+				for (int i=2; i<(GPGGA_string_size_u32 - 5); i++)
 				{
 					check_sum_calc_u8 ^= GPGGA_string[i];
 				}
-				sprintf(DebugString,"CheckSum: %X %X\r\n", check_sum_calc_u8, check_sum_glue_u8);
-				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-				LCD_Printf(DebugString);
-			}
-			else
-			{
-				sprintf(DebugString,"CheckSum: xx xx\r\n");
-				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-				LCD_Printf(DebugString);
 			}
 
 			uint8_t check_sum_status_flag = 0;
 			if (check_sum_calc_u8 == check_sum_glue_u8)
 			{
 				check_sum_status_flag = 1;
+				sprintf(DebugString,"CS - Ok / ");
+				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+				LCD_Printf(DebugString);
 			}
-
 
 			if ((check_sum_status_flag == 1) && (first_circle_flag == 1))
 			{
@@ -283,13 +276,13 @@ int main(void)
 				{
 					tmp_time_filename_string[i] = 0x00;
 				}
-				memcpy(tmp_time_filename_string, &GPSdata_string[7], 2);
+				memcpy(tmp_time_filename_string, &GPGGA_string[7], 2);
 				file_name_hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
 
-				memcpy(tmp_time_filename_string, &GPSdata_string[9], 2);
+				memcpy(tmp_time_filename_string, &GPGGA_string[9], 2);
 				file_name_minutes_int = atoi(tmp_time_filename_string);
 
-				memcpy(tmp_time_filename_string, &GPSdata_string[11], 2);
+				memcpy(tmp_time_filename_string, &GPGGA_string[11], 2);
 				file_name_seconds_int = atoi(tmp_time_filename_string);
 			}
 			else
@@ -314,20 +307,40 @@ int main(void)
 
 			}
 
-
-			#define FILE_NAME_SIZE 15
 			char current_file_name_char[FILE_NAME_SIZE];
 
-			int file_name_int = file_name_hour_int*10000 + file_name_minutes_int*100 + file_name_seconds_int/6;
+			char folder_name[FILE_NAME_SIZE];
+			sprintf(folder_name, "0:\\%02d\\%02d", file_name_hour_int, file_name_minutes_int);
+
+			int file_name_int = file_name_hour_int*10000 + file_name_minutes_int*100 + 12*(file_name_seconds_int/12);
 			sprintf(current_file_name_char,"%06d_%d.txt", file_name_int, (int)check_sum_status_flag);
-			LCD_Printf("%s\r\n",current_file_name_char);
-			sprintf(DebugString,"fn:%s\r\n", current_file_name_char);
+
+
+			//int len = strlen(folder_name) + strlen(current_file_name_char) + strlen("0:\\\\") + 1;
+			int len = strlen(current_file_name_char) + 1;
+			//int len = strlen(folder_name) + strlen(current_file_name_char) + strlen("\\") + 1;
+
+			char PathString[len];
+			//snprintf(PathString, len,"%s\\%s", folder_name, current_file_name_char);
+			snprintf(PathString, len,"%s", current_file_name_char);
+
+			TCHAR str[len], *t = str;
+			char *s = PathString;
+
+			while(*s)
+			 *t++ = (TCHAR)*s++;
+			*t = 0;
+
+			sprintf(DebugString,"%s", str);
 			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+			LCD_Printf("%s",str);
 
 			//	write to first file
 			HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
 
-			fres = f_open(&USERFile, current_file_name_char, FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
+//			if(f_open(&fileW, str, FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
+
+			fres = f_open(&USERFile, str, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
 			//fres = f_open(&USERFile, "asd/tm.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
 			if (fres == FR_OK)
 			{
@@ -335,13 +348,13 @@ int main(void)
 				f_printf(&USERFile, "%s", GPGGA_string);	/* Write to file */
 
 				f_close(&USERFile);	/* Close file */
-				sprintf(DebugString,"write_to_SD - OK \r\n");
+				sprintf(DebugString," / write_to_SD - OK    \r\n");
 				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 				LCD_Printf("%s",DebugString);
 			}
 			else
 			{
-				sprintf(DebugString,"write_to_SD - FAILED \r\n");
+				sprintf(DebugString," / write_to_SD - FAILED \r\n");
 				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 				LCD_Printf("%s",DebugString);
 			}
