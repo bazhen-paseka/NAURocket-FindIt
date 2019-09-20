@@ -22,6 +22,7 @@
 #include "main.h"
 #include "dma.h"
 #include "fatfs.h"
+#include "iwdg.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -138,6 +139,7 @@ int main(void)
   MX_FATFS_Init();
   MX_TIM3_Init();
   MX_UART5_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
 	LCD_Init();
@@ -146,6 +148,7 @@ int main(void)
 	LCD_FillScreen(0x0000);
 	//	LCD_SetTextColor(GREEN, BLACK);
 	LCD_SetTextColor(0x07E0, 0x0000);
+	LCD_SetCursor(0, 0);
 
 	char DebugString[DEBUG_STRING_SIZE];
 	sprintf(DebugString,"\r\n\r\nNAU_Rocket Find_It\r\n2019 v200\r\nfor_debug UART5 115200/8-N-1\r\n");
@@ -166,6 +169,7 @@ int main(void)
 		sprintf(DebugString,"\r\nSD-card_mount  Failed \r\n");
 		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
+		HAL_Delay(1000);
 
 	}
 	else
@@ -183,7 +187,7 @@ int main(void)
 //	HAL_TIM_Base_Start(&htim10);
 
 	//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
-
+	HAL_IWDG_Refresh(&hiwdg);
 
   /* USER CODE END 2 */
 
@@ -224,6 +228,8 @@ int main(void)
 
 		if (GPSdata_length_int > 350)
 		{
+			HAL_IWDG_Refresh(&hiwdg);
+
 			HAL_TIM_Base_Stop_IT(&htim3);
 			HAL_TIM_Base_Stop(&htim3);
 
@@ -382,7 +388,7 @@ int main(void)
 		}	//			if (GPSdata_length_int > 50)
 		else
 		{
-			LCD_FillScreen(0x0000);
+			//LCD_FillScreen(0x0000);
 			LCD_SetCursor(0, 0);
 			sprintf(DebugString,"Buffer empty\r\n");
 			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -477,9 +483,10 @@ void SystemClock_Config(void)
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 8;
