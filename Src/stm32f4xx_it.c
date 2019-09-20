@@ -43,8 +43,9 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
-	extern uint8_t shudown_button_pressed_flag;
-	extern uint8_t time_write_to_SD_flag;
+	extern uint8_t shudown_button_pressed_flag	;
+	extern uint8_t time_write_to_SD_flag		;
+	extern uint8_t time_read_from_SD_u8			;
 
 /* USER CODE END PV */
 
