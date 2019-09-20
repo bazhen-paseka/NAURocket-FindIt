@@ -144,10 +144,8 @@ int main(void)
 
 	LCD_Init();
 	LCD_SetRotation(1);
-	//	LCD_FillScreen(BLACK);
-	LCD_FillScreen(0x0000);
-	//	LCD_SetTextColor(GREEN, BLACK);
-	LCD_SetTextColor(0x07E0, 0x0000);
+	LCD_FillScreen(ILI92_BLACK);
+	LCD_SetTextColor(ILI92_GREEN, ILI92_BLACK);
 	LCD_SetCursor(0, 0);
 
 	char DebugString[DEBUG_STRING_SIZE];
@@ -160,13 +158,13 @@ int main(void)
   	uint32_t rx_count;
 
   	FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
-	/* Mount SDCARD */
-	if (f_mount(&USERFatFS, "0:", 1) != FR_OK) {
-		/* Unmount SDCARD */
-		f_mount(NULL, "0:", 0);
+
+	if (f_mount(&USERFatFS, "0:", 1) != FR_OK)	/* try to mount SDCARD */
+	{
+		f_mount(NULL, "0:", 0);			/* Unmount SDCARD */
 		Error_Handler();
 
-		sprintf(DebugString,"\r\nSD-card_mount  Failed \r\n");
+		sprintf(DebugString,"\r\nSD-card_mount - Failed \r\n");
 		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
 		HAL_Delay(1000);
@@ -174,19 +172,15 @@ int main(void)
 	}
 	else
 	{
-		sprintf(DebugString,"\r\nSD-card_mount - OK \r\n");
+		sprintf(DebugString,"\r\nSD-card_mount - Ok \r\n");
 		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
 	}
 
-	LCD_FillScreen(0x0000);
+	LCD_FillScreen(ILI92_BLACK);
+
 	HAL_TIM_Base_Start_IT(&htim3);
 	HAL_TIM_Base_Start(&htim3);
-
-//	HAL_TIM_Base_Start_IT(&htim10);
-//	HAL_TIM_Base_Start(&htim10);
-
-	//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
 	HAL_IWDG_Refresh(&hiwdg);
 
   /* USER CODE END 2 */
@@ -224,7 +218,7 @@ int main(void)
 
 	if (time_write_to_SD_flag == 1)
 	{
-		//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
 
 		if (GPSdata_length_int > 350)
 		{
@@ -390,12 +384,12 @@ int main(void)
 		{
 			//LCD_FillScreen(0x0000);
 			LCD_SetCursor(0, 0);
-			sprintf(DebugString,"Buffer empty\r\n");
+			sprintf(DebugString,"Buffer empty. Lngth = %d\r\n", GPSdata_length_int);
 			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 			LCD_Printf("%s", DebugString);
 			GPSdata_length_int = 0;
 		}
-		//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_RESET);
 		time_write_to_SD_flag  = 0 ;
 	}	//		if (time_write_to_SD_flag == 1)
 
