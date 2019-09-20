@@ -87,6 +87,8 @@
 	char GPGGA_string[GPGGA_STRING_SIZE];
 	uint32_t GPGGA_string_size_u32 = 0;
 
+	FRESULT fres;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -109,8 +111,6 @@ void SystemClock_Config(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
-	FRESULT fres;
 
   /* USER CODE END 1 */
   
@@ -384,7 +384,7 @@ int main(void)
 		{
 			//LCD_FillScreen(0x0000);
 			LCD_SetCursor(0, 0);
-			sprintf(DebugString,"Buffer empty. Lngth = %d\r\n", GPSdata_length_int);
+			sprintf(DebugString,"Buf empty. L= %d\r\n", GPSdata_length_int);
 			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 			LCD_Printf("%s", DebugString);
 			GPSdata_length_int = 0;
