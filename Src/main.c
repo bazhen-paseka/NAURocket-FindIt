@@ -43,12 +43,14 @@
 
 	typedef enum
 	{
+		SM_START					,
 		SM_IDLE						,
 		SM_READ_FROM_RINGBUFFER		,
 		SM_FIND_GGA					,
 		SM_FIND_ASTERISK			,
 		SM_CALC_SHECKSUM			,
 		SM_GET_TIME					,
+		SM_UPDATE_TIME_FILENAME		,
 		SM_PREPARE_FILENAME			,
 		SM_WRITE_SDCARD				,
 		SM_FINISH					,
@@ -103,10 +105,12 @@
 	uint32_t GGA_string_end_u32 = 0;
 	char GPGGA_string[GPGGA_STRING_SIZE];
 	uint32_t GPGGA_string_size_u32 = 0;
+	uint8_t check_sum_status_flag = 0;
 
 	FRESULT fres;
 
 	GPS_state_machine sm_stage = SM_IDLE;
+	TCHAR str[FILE_NAME_SIZE];
 
 /* USER CODE END PV */
 
@@ -168,26 +172,23 @@ int main(void)
 	LCD_SetCursor(0, 0);
 
 	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,"\r\n\r\nNAU_Rocket Find_It\r\n2019 v200\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"\r\n\r\n");
+	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+	sprintf(DebugString,"NAU_Rocket Find_It\r\n2019 v2.0.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
-
 	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
   	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
-  	uint32_t rx_count;
-
   	FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
 
 	if (f_mount(&USERFatFS, "0:", 1) != FR_OK)	/* try to mount SDCARD */
 	{
 		f_mount(NULL, "0:", 0);			/* Unmount SDCARD */
 		Error_Handler();
-
 		sprintf(DebugString,"\r\nSD-card_mount - Failed \r\n");
 		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
 		HAL_Delay(1000);
-
 	}
 	else
 	{
@@ -198,8 +199,6 @@ int main(void)
 
 	LCD_FillScreen(ILI92_BLACK);
 
-	HAL_TIM_Base_Start_IT(&htim3);
-	HAL_TIM_Base_Start(&htim3);
 	HAL_IWDG_Refresh(&hiwdg);
 
   /* USER CODE END 2 */
@@ -211,6 +210,14 @@ int main(void)
   {
 		switch (sm_stage)
 		{
+			case SM_START:
+			{
+				HAL_TIM_Base_Start_IT(&htim3);
+				HAL_TIM_Base_Start(&htim3);
+				sm_stage =SM_IDLE;
+			} break;
+			//***********************************************************
+
 			case SM_IDLE:
 			{
 				sm_stage = SM_READ_FROM_RINGBUFFER;
@@ -229,6 +236,7 @@ int main(void)
 
 			case SM_READ_FROM_RINGBUFFER:
 			{
+			  	uint32_t rx_count;
 				rx_count = RingBuffer_DMA_Count(&rx_buffer);
 				while ((rx_count--) && (time_write_to_SD_flag == 0))
 				{
@@ -255,6 +263,9 @@ int main(void)
 
 				if (time_write_to_SD_flag == 1)
 				{
+					HAL_IWDG_Refresh(&hiwdg);
+					HAL_TIM_Base_Stop_IT(&htim3);
+					HAL_TIM_Base_Stop(&htim3);
 					sm_stage = SM_FIND_GGA;
 				}
 			} break;
@@ -262,6 +273,8 @@ int main(void)
 
 			case SM_FIND_GGA:
 			{
+				HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
+
 				sm_stage = SM_FIND_ASTERISK;
 			} break;
 			//***********************************************************
@@ -274,15 +287,8 @@ int main(void)
 
 			case SM_CALC_SHECKSUM:
 			{
-				HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
-
 				if (GPSdata_length_int > 350)
 				{
-					HAL_IWDG_Refresh(&hiwdg);
-
-					HAL_TIM_Base_Stop_IT(&htim3);
-					HAL_TIM_Base_Stop(&htim3);
-
 					if ( (GPGGA_string_size_u32 > 10) && (GPGGA_string_size_u32 < GPGGA_STRING_SIZE) )
 					{
 						memcpy(GPGGA_string, &GPSdata_string[GGA_string_start_u32], GPGGA_string_size_u32 );
@@ -292,10 +298,7 @@ int main(void)
 					GPSdata_length_int = 0;
 
 					circle_u32++;
-					//LCD_SetCursor(0, 0);
 					LCD_SetCursor(0, 100*(circle_u32%2));
-
-					// print GPGGA string:
 					sprintf(DebugString,"%s", GPGGA_string);
 					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 					LCD_Printf("%s", DebugString);
@@ -314,7 +317,6 @@ int main(void)
 						}
 					}
 
-					uint8_t check_sum_status_flag = 0;
 					if (check_sum_calc_u8 == check_sum_glue_u8)
 					{
 						check_sum_status_flag = 1;
@@ -325,154 +327,152 @@ int main(void)
 
 					if ((check_sum_status_flag == 1) && (first_circle_flag == 1))
 					{
-						sprintf(DebugString,"\r\nCheckSum - Ok\r\n");
-						HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-						first_circle_flag = 0;
-
-						#define TMP_TIME_FILENAME_SIZE	5
-						char tmp_time_filename_string[TMP_TIME_FILENAME_SIZE];
-
-						for (int i=0; i<TMP_TIME_FILENAME_SIZE; i++)
-						{
-							tmp_time_filename_string[i] = 0x00;
-						}
-						memcpy(tmp_time_filename_string, &GPGGA_string[7], 2);
-						file_name_hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
-
-						memcpy(tmp_time_filename_string, &GPGGA_string[9], 2);
-						file_name_minutes_int = atoi(tmp_time_filename_string);
-
-						memcpy(tmp_time_filename_string, &GPGGA_string[11], 2);
-						file_name_seconds_int = atoi(tmp_time_filename_string);
+						sm_stage = SM_GET_TIME;
 					}
 					else
 					{
-						if (file_name_seconds_int < 59)
-						{
-							file_name_seconds_int++;
-						}
-						else
-						{
-							file_name_seconds_int = 0;
-							if (file_name_minutes_int < 59)
-							{
-								file_name_minutes_int++;
-							}
-							else
-							{
-								file_name_minutes_int = 0;
-								file_name_hour_int++;
-							}
-						}
-
+						sm_stage = SM_UPDATE_TIME_FILENAME;
 					}
-
-					char current_file_name_char[FILE_NAME_SIZE];
-
-					char folder_name[FILE_NAME_SIZE];
-					sprintf(folder_name, "0:\\%02d\\%02d", file_name_hour_int, file_name_minutes_int);
-
-					int file_name_int = file_name_hour_int*10000 + file_name_minutes_int*100 + 12*(file_name_seconds_int/12);
-					sprintf(current_file_name_char,"%06d_%d.txt", file_name_int, (int)check_sum_status_flag);
-
-
-					//int len = strlen(folder_name) + strlen(current_file_name_char) + strlen("0:\\\\") + 1;
-					int len = strlen(current_file_name_char) + 1;
-					//int len = strlen(folder_name) + strlen(current_file_name_char) + strlen("\\") + 1;
-
-					char PathString[len];
-					//snprintf(PathString, len,"%s\\%s", folder_name, current_file_name_char);
-					snprintf(PathString, len,"%s", current_file_name_char);
-
-					TCHAR str[len], *t = str;
-					char *s = PathString;
-
-					while(*s)
-					 *t++ = (TCHAR)*s++;
-					*t = 0;
-
-					sprintf(DebugString,"%s", str);
-					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-					//LCD_Printf("%s",str);
-
-					//	write to first file
-					HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
-
-		//			if(f_open(&fileW, str, FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
-
-					fres = f_open(&USERFile, str, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
-					//fres = f_open(&USERFile, "asd/tm.txt", FA_OPEN_APPEND | FA_WRITE);			/* Try to open file */
-					if (fres == FR_OK)
-					{
-						//f_printf(&USERFile, "%s", GPSdata_string);	/* Write to file */	GPGGA_string
-						f_printf(&USERFile, "%s", GPGGA_string);	/* Write to file */
-
-						f_close(&USERFile);	/* Close file */
-						sprintf(DebugString," / write_to_SD - OK    \r\n");
-						HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-						//LCD_Printf("%s",DebugString);
-					}
-					else
-					{
-						sprintf(DebugString," / write_to_SD - FAILED \r\n");
-						HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-						//LCD_Printf("%s",DebugString);
-					}
-					 HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
-					//	end write to file
-
-					TIM3->CNT = 0;
-					HAL_TIM_Base_Start(&htim3);
-					HAL_TIM_Base_Start_IT(&htim3);
-					GPSdata_length_int = 0;
-
-					GGA_string_start_u32 = 0;
-					GGA_string_end_u32 = 0;
-					GPGGA_string_size_u32 = 0;
 				}	//			if (GPSdata_length_int > 50)
 				else
 				{
-					//LCD_FillScreen(0x0000);
-					LCD_SetCursor(0, 0);
-					sprintf(DebugString,"Buf empty. L= %d\r\n", GPSdata_length_int);
-					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-					LCD_Printf("%s", DebugString);
-					GPSdata_length_int = 0;
+					sm_stage = SM_ERROR_HANDLER;
 				}
-				HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_RESET);
-				time_write_to_SD_flag  = 0 ;
 
-				sm_stage = SM_GET_TIME;
 			} break;
 			//***********************************************************
 
 			case SM_GET_TIME:
 			{
+//				sprintf(DebugString,"\r\nCheckSum - Ok\r\n");
+//				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+				first_circle_flag = 0;
+
+				#define TMP_TIME_FILENAME_SIZE	5
+				char tmp_time_filename_string[TMP_TIME_FILENAME_SIZE];
+
+				for (int i=0; i<TMP_TIME_FILENAME_SIZE; i++)
+				{
+					tmp_time_filename_string[i] = 0x00;
+				}
+				memcpy(tmp_time_filename_string, &GPGGA_string[7], 2);
+				file_name_hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
+
+				memcpy(tmp_time_filename_string, &GPGGA_string[9], 2);
+				file_name_minutes_int = atoi(tmp_time_filename_string);
+
+				memcpy(tmp_time_filename_string, &GPGGA_string[11], 2);
+				file_name_seconds_int = atoi(tmp_time_filename_string);
+
+				sm_stage = SM_UPDATE_TIME_FILENAME;
+			} break;
+			//***********************************************************
+
+
+			case SM_UPDATE_TIME_FILENAME:
+			{
+				if (file_name_seconds_int < 59)
+				{
+					file_name_seconds_int++;
+				}
+				else
+				{
+					file_name_seconds_int = 0;
+					if (file_name_minutes_int < 59)
+					{
+						file_name_minutes_int++;
+					}
+					else
+					{
+						file_name_minutes_int = 0;
+						file_name_hour_int++;
+					}
+				}
 				sm_stage = SM_PREPARE_FILENAME;
 			} break;
 			//***********************************************************
 
+
 			case SM_PREPARE_FILENAME:
 			{
+				char current_file_name_char[FILE_NAME_SIZE];
+				char folder_name[FILE_NAME_SIZE];
+				sprintf(folder_name, "0:\\%02d\\%02d", file_name_hour_int, file_name_minutes_int);
+				int file_name_int = file_name_hour_int*10000 + file_name_minutes_int*100 + 12*(file_name_seconds_int/12);
+				sprintf(current_file_name_char,"%06d_%d.txt", file_name_int, (int)check_sum_status_flag);
+				//int len = strlen(folder_name) + strlen(current_file_name_char) + strlen("0:\\\\") + 1;
+				int len = strlen(current_file_name_char) + 1;
+				//int len = strlen(folder_name) + strlen(current_file_name_char) + strlen("\\") + 1;
+				char PathString[len];
+				//snprintf(PathString, len,"%s\\%s", folder_name, current_file_name_char);
+				snprintf(PathString, len,"%s", current_file_name_char);
+				//TCHAR str[len], *t = str;
+				TCHAR *t = str;
+				char *s = PathString;
+				while(*s)
+				 *t++ = (TCHAR)*s++;
+				*t = 0;
+				sprintf(DebugString,"%s", str);
+				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+				//LCD_Printf("%s",str);
+
 				sm_stage = SM_WRITE_SDCARD;
 			} break;
 			//***********************************************************
 
 			case SM_WRITE_SDCARD:
 			{
+				HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
+				fres = f_open(&USERFile, str, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
+				if (fres == FR_OK)
+				{
+					f_printf(&USERFile, "%s", GPGGA_string);	/* Write to file */
+					f_close(&USERFile);	/* Close file */
+					sprintf(DebugString," / write_to_SD - OK    \r\n");
+					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+					//LCD_Printf("%s",DebugString);
+				}
+				else
+				{
+					sprintf(DebugString," / write_to_SD - FAILED \r\n");
+					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+					//LCD_Printf("%s",DebugString);
+				}
+				 HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
+				//	end write to file
+
 				sm_stage = SM_FINISH;
 			} break;
 			//***********************************************************
 
 			case SM_FINISH:
 			{
-				sm_stage = SM_IDLE;
+				TIM3->CNT = 0;
+				//HAL_TIM_Base_Start(&htim3);
+				//HAL_TIM_Base_Start_IT(&htim3);
+				GPSdata_length_int = 0;
+
+				GGA_string_start_u32 = 0;
+				GGA_string_end_u32 = 0;
+				GPGGA_string_size_u32 = 0;
+
+				HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_RESET);
+				time_write_to_SD_flag  = 0 ;
+
+				sm_stage = SM_START;
 			} break;
 			//***********************************************************
 
 			case SM_ERROR_HANDLER:
 			{
-				sm_stage = SM_IDLE;
+				//LCD_FillScreen(0x0000);
+				LCD_SetCursor(0, 0);
+				sprintf(DebugString,"Buf empty. L= %d\r\n", GPSdata_length_int);
+				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+				LCD_Printf("%s", DebugString);
+				GPSdata_length_int = 0;
+
+				sm_stage = SM_FINISH;
 			} break;
 			//***********************************************************
 
@@ -490,6 +490,7 @@ int main(void)
 					HAL_Delay(800);
 					HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
 					HAL_Delay(300);
+					HAL_IWDG_Refresh(&hiwdg);
 				}
 
 				LCD_FillScreen(0x0000);
@@ -537,6 +538,7 @@ int main(void)
 				sm_stage = SM_IDLE;
 			} break;
 			//***********************************************************
+
 			default:
 			{
 				sm_stage = SM_IDLE;
