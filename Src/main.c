@@ -41,6 +41,7 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+	//***********************************************************
 	typedef enum
 	{
 		SM_START					,
@@ -58,6 +59,7 @@
 		SM_SHUTDOWN					,
 		SM_READ_FROM_SDCARD
 	} GPS_state_machine;
+	//***********************************************************
 
 	typedef struct
 	{
@@ -65,6 +67,17 @@
 		int minutes_int	;
 		int seconds_int	;
 	} filename_time_struct;
+	//***********************************************************
+
+	#define GGA_STRING_SIZE 		99
+	typedef struct
+	{
+		char 		string[GGA_STRING_SIZE];
+		int	start;
+		int	end;
+		int	length;
+	} GGA_struct;
+	//***********************************************************
 
 /* USER CODE END PTD */
 
@@ -72,7 +85,6 @@
 /* USER CODE BEGIN PD */
 
 	#define RX_BUFFER_SIZE 			550
-	#define GPGGA_STRING_SIZE 		99
 	#define	GPS_DATA_SIZE			650
 	#define MAX_CHAR_IN_GPS_DATA	630
 	#define	TIMEZONE				3
@@ -98,16 +110,11 @@
 	RingBuffer_DMA rx_buffer;
 	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
 
-	char GPSdata_string[GPS_DATA_SIZE];
-	int GPSdata_length_int = 0;
+	char NEO6data_string[GPS_DATA_SIZE];
+	int NEO6data_length_int = 0;
 
 	 uint8_t first_circle_flag 		= 1;
 	uint32_t circle_u32 			= 0;
-
-	uint32_t GGA_string_start_u32 = 0;
-	uint32_t GGA_string_end_u32 = 0;
-	char GPGGA_string[GPGGA_STRING_SIZE];
-	uint32_t GPGGA_string_size_u32 = 0;
 	uint8_t check_sum_status_flag = 0;
 
 	FRESULT fres;
@@ -115,6 +122,7 @@
 	GPS_state_machine sm_stage = SM_IDLE;
 	TCHAR str[FILE_NAME_SIZE];
 	filename_time_struct filename_st;
+	GGA_struct GGA_st;
 
 /* USER CODE END PV */
 
@@ -123,7 +131,8 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
 	uint8_t _char_to_uint8 (uint8_t char_1, uint8_t char_0);
-	void update_time_for_filename(filename_time_struct fl_st);
+	void update_time_for_filename(filename_time_struct);
+	void get_time(GGA_struct, filename_time_struct);
 
 /* USER CODE END PFP */
 
@@ -246,22 +255,22 @@ int main(void)
 				while ((rx_count--) && (time_write_to_SD_flag == 0))
 				{
 					uint8_t current_GPS_char = RingBuffer_DMA_GetByte(&rx_buffer);
-					if (GPSdata_length_int > MAX_CHAR_IN_GPS_DATA)
+					if (NEO6data_length_int > MAX_CHAR_IN_GPS_DATA)
 					{
 						time_write_to_SD_flag = 1;
 					}
 					else
 					{
-						GPSdata_string[GPSdata_length_int++] = current_GPS_char;
+						NEO6data_string[NEO6data_length_int++] = current_GPS_char;
 
-						if ((GPSdata_length_int >10) && (memcmp(&GPSdata_string[GPSdata_length_int-7], "$GPGGA," ,7) == 0) && (GGA_string_start_u32 == 0))
+						if ((NEO6data_length_int >10) && (memcmp(&NEO6data_string[NEO6data_length_int-7], "$GPGGA," ,7) == 0) && (GGA_st.start == 0))
 						{
-							GGA_string_start_u32 = GPSdata_length_int - 7;
+							GGA_st.start = NEO6data_length_int - 7;
 						}
-						if ((GGA_string_start_u32 >50) && (GPSdata_string[GPSdata_length_int-1] == '*') && (GGA_string_end_u32 == 0))
+						if ((GGA_st.start >50) && (NEO6data_string[NEO6data_length_int-1] == '*') && (GGA_st.end == 0))
 						{
-							GGA_string_end_u32 = GPSdata_length_int + 4;
-							GPGGA_string_size_u32 = GGA_string_end_u32 - GGA_string_start_u32;
+							GGA_st.end = NEO6data_length_int + 4;
+							GGA_st.length = GGA_st.end - GGA_st.start;
 						}
 					}
 				} // end while rx_count
@@ -292,42 +301,41 @@ int main(void)
 
 			case SM_CALC_SHECKSUM:
 			{
-				if (GPSdata_length_int > 350)
+				if (NEO6data_length_int > 350)
 				{
-					if ( (GPGGA_string_size_u32 > 10) && (GPGGA_string_size_u32 < GPGGA_STRING_SIZE) )
+					if ( (GGA_st.length > 10) && (GGA_st.length < GGA_STRING_SIZE) )
 					{
-						memcpy(GPGGA_string, &GPSdata_string[GGA_string_start_u32], GPGGA_string_size_u32 );
+						memcpy(GGA_st.string, &NEO6data_string[GGA_st.start], GGA_st.length );
 					}
 
-					GPSdata_string[GPSdata_length_int++] = 0; // we received whole command, setting end of string
-					GPSdata_length_int = 0;
+					NEO6data_string[NEO6data_length_int++] = 0; // we received whole command, setting end of string
+					NEO6data_length_int = 0;
 
 					circle_u32++;
 					LCD_SetCursor(0, 100*(circle_u32%2));
-					sprintf(DebugString,"%s", GPGGA_string);
+					sprintf(DebugString,"%s", GGA_st.string);
 					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 					LCD_Printf("%s", DebugString);
 
 					// CountCheckSum
 					uint8_t check_sum_calc_u8 = 0;
 					uint8_t check_sum_glue_u8 = 1;
-					if ((GPGGA_string_size_u32 < GPGGA_STRING_SIZE) && (GPGGA_string_size_u32 > 10))
+					if ((GGA_st.length < GGA_STRING_SIZE) && (GGA_st.length > 10))
 					{
-						//check_sum_glue_u8 = _char_to_uint8 (GPGGA_string[GPGGA_string_size_u32 - 4], GPGGA_string[GPGGA_string_size_u32 - 3]);
-
 						#define TMP_CHECK_SUM_SIZE	4
 						char tmp_check_sum_glue_string[TMP_CHECK_SUM_SIZE];
 						for (int i=0; i<TMP_CHECK_SUM_SIZE; i++)
 						{
 							tmp_check_sum_glue_string[i] = 0x00;
 						}
-						memcpy(tmp_check_sum_glue_string, &GPGGA_string[GPGGA_string_size_u32 - 4], 2);
+						memcpy(tmp_check_sum_glue_string, &GGA_st.string[GGA_st.length - 4], 2);
 						check_sum_glue_u8 = strtol(tmp_check_sum_glue_string, NULL, 16);
+//						check_sum_glue_u8 = _char_to_uint8 (GPGGA_string[GPGGA_string_size_u32 - 4], GPGGA_string[GPGGA_string_size_u32 - 3]);
 
-						check_sum_calc_u8 = GPGGA_string[1];
-						for (int i=2; i<(GPGGA_string_size_u32 - 5); i++)
+						check_sum_calc_u8 = GGA_st.string[1];
+						for (int i=2; i<(GGA_st.length - 5); i++)
 						{
-							check_sum_calc_u8 ^= GPGGA_string[i];
+							check_sum_calc_u8 ^= GGA_st.string[i];
 						}
 					}
 
@@ -342,15 +350,22 @@ int main(void)
 					if ((check_sum_status_flag == 1) && (first_circle_flag == 1))
 					{
 						sm_stage = SM_GET_TIME;
+						sprintf(DebugString," SM_GET_TIME ");
+						HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 					}
 					else
 					{
 						sm_stage = SM_UPDATE_TIME_FILENAME;
+//						sprintf(DebugString," SM_UPDATE_TIME_FILENAME ");
+//						HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 					}
-				}	//			if (GPSdata_length_int > 50)
+				}	//			if (NEO6data_length_int > 50)
 				else
 				{
 					sm_stage = SM_ERROR_HANDLER;
+
+					sprintf(DebugString," SM_ERROR_HANDLER ");
+					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 				}
 
 			} break;
@@ -358,25 +373,10 @@ int main(void)
 
 			case SM_GET_TIME:
 			{
-//				sprintf(DebugString,"\r\nCheckSum - Ok\r\n");
-//				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-				first_circle_flag = 0;
+				get_time(GGA_st, filename_st);
 
-				#define TMP_TIME_FILENAME_SIZE	5
-				char tmp_time_filename_string[TMP_TIME_FILENAME_SIZE];
-
-				for (int i=0; i<TMP_TIME_FILENAME_SIZE; i++)
-				{
-					tmp_time_filename_string[i] = 0x00;
-				}
-				memcpy(tmp_time_filename_string, &GPGGA_string[7], 2);
-				filename_st.hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
-
-				memcpy(tmp_time_filename_string, &GPGGA_string[9], 2);
-				filename_st.minutes_int = atoi(tmp_time_filename_string);
-
-				memcpy(tmp_time_filename_string, &GPGGA_string[11], 2);
-				filename_st.seconds_int = atoi(tmp_time_filename_string);
+				sprintf(DebugString,"UPT1: %d:%d:%d\r\n", filename_st.hour_int,filename_st.minutes_int, filename_st.seconds_int);
+				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 				sm_stage = SM_UPDATE_TIME_FILENAME;
 			} break;
@@ -385,6 +385,8 @@ int main(void)
 
 			case SM_UPDATE_TIME_FILENAME:
 			{
+				sprintf(DebugString,"UPT2: %d:%d:%d\r\n", filename_st.hour_int,filename_st.minutes_int, filename_st.seconds_int);
+				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 				update_time_for_filename(filename_st);
 				sm_stage = SM_PREPARE_FILENAME;
 			} break;
@@ -424,7 +426,7 @@ int main(void)
 				fres = f_open(&USERFile, str, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
 				if (fres == FR_OK)
 				{
-					f_printf(&USERFile, "%s", GPGGA_string);	/* Write to file */
+					f_printf(&USERFile, "%s", GGA_st.string);	/* Write to file */
 					f_close(&USERFile);	/* Close file */
 					sprintf(DebugString," / write_to_SD - OK    \r\n");
 					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -448,11 +450,11 @@ int main(void)
 				TIM3->CNT = 0;
 				//HAL_TIM_Base_Start(&htim3);
 				//HAL_TIM_Base_Start_IT(&htim3);
-				GPSdata_length_int = 0;
+				NEO6data_length_int = 0;
 
-				GGA_string_start_u32 = 0;
-				GGA_string_end_u32 = 0;
-				GPGGA_string_size_u32 = 0;
+				GGA_st.start = 0;
+				GGA_st.end = 0;
+				GGA_st.length = 0;
 
 				HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_RESET);
 				time_write_to_SD_flag  = 0 ;
@@ -465,10 +467,10 @@ int main(void)
 			{
 				//LCD_FillScreen(0x0000);
 				LCD_SetCursor(0, 0);
-				sprintf(DebugString,"Buf empty. L= %d\r\n", GPSdata_length_int);
+				sprintf(DebugString,"Buf empty. L= %d\r\n", NEO6data_length_int);
 				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 				LCD_Printf("%s", DebugString);
-				GPSdata_length_int = 0;
+				NEO6data_length_int = 0;
 
 				sm_stage = SM_FINISH;
 			} break;
@@ -629,27 +631,59 @@ uint8_t _char_to_uint8 (uint8_t char_1, uint8_t char_0)
 }
 //***********************************************************
 
-void update_time_for_filename(filename_time_struct fl_st)
+void update_time_for_filename(filename_time_struct _fl_st)
 {
-	if (fl_st.seconds_int < 59)
+	if (_fl_st.seconds_int < 59)
 	{
-		fl_st.seconds_int++;
+		_fl_st.seconds_int++;
 	}
 	else
 	{
-		fl_st.seconds_int = 0;
-		if (fl_st.minutes_int < 59)
+		_fl_st.seconds_int = 0;
+		if (_fl_st.minutes_int < 59)
 		{
-			fl_st.minutes_int++;
+			_fl_st.minutes_int++;
 		}
 		else
 		{
-			fl_st.minutes_int = 0;
-			fl_st.hour_int++;
+			_fl_st.minutes_int = 0;
+			_fl_st.hour_int++;
 		}
 	}
+	char DebugString[DEBUG_STRING_SIZE];
+	sprintf(DebugString,"update_time: %d:%d:%d\r\n", _fl_st.hour_int,_fl_st.minutes_int, _fl_st.seconds_int);
+	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 }
 //***********************************************************
+
+void get_time(GGA_struct _gga_st, filename_time_struct _fl_st)
+{
+	first_circle_flag = 0;
+	char DebugString[DEBUG_STRING_SIZE];
+
+	#define TMP_TIME_FILENAME_SIZE	5
+	char tmp_time_filename_string[TMP_TIME_FILENAME_SIZE];
+
+	for (int i=0; i<TMP_TIME_FILENAME_SIZE; i++)
+	{
+		tmp_time_filename_string[i] = 0x00;
+	}
+	memcpy(tmp_time_filename_string, &_gga_st.string[7], 2);
+	_fl_st.hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
+
+	memcpy(tmp_time_filename_string, &_gga_st.string[9], 2);
+	_fl_st.minutes_int = atoi(tmp_time_filename_string);
+
+	memcpy(tmp_time_filename_string, &_gga_st.string[11], 2);
+	_fl_st.seconds_int = atoi(tmp_time_filename_string);
+
+	sprintf(DebugString,"get_time: %d:%d:%d\r\n", _fl_st.hour_int,_fl_st.minutes_int, _fl_st.seconds_int);
+	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+}
+//***********************************************************
+
+//***********************************************************
+
 
 /* USER CODE END 4 */
 
