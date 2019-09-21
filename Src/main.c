@@ -313,7 +313,16 @@ int main(void)
 					uint8_t check_sum_glue_u8 = 1;
 					if ((GPGGA_string_size_u32 < GPGGA_STRING_SIZE) && (GPGGA_string_size_u32 > 10))
 					{
-						check_sum_glue_u8 = _char_to_uint8 (GPGGA_string[GPGGA_string_size_u32 - 4], GPGGA_string[GPGGA_string_size_u32 - 3]);
+						//check_sum_glue_u8 = _char_to_uint8 (GPGGA_string[GPGGA_string_size_u32 - 4], GPGGA_string[GPGGA_string_size_u32 - 3]);
+
+						#define TMP_CHECK_SUM_SIZE	4
+						char tmp_check_sum_glue_string[TMP_CHECK_SUM_SIZE];
+						for (int i=0; i<TMP_CHECK_SUM_SIZE; i++)
+						{
+							tmp_check_sum_glue_string[i] = 0x00;
+						}
+						memcpy(tmp_check_sum_glue_string, &GPGGA_string[GPGGA_string_size_u32 - 4], 2);
+						check_sum_glue_u8 = strtol(tmp_check_sum_glue_string, NULL, 16);
 
 						check_sum_calc_u8 = GPGGA_string[1];
 						for (int i=2; i<(GPGGA_string_size_u32 - 5); i++)
@@ -423,7 +432,7 @@ int main(void)
 				}
 				else
 				{
-					sprintf(DebugString," / write_to_SD - FAILED \r\n");
+					sprintf(DebugString," / write_to_SD - FAILED ");
 					HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 					//LCD_Printf("%s",DebugString);
 				}
