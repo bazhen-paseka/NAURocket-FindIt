@@ -59,6 +59,13 @@
 		SM_READ_FROM_SDCARD
 	} GPS_state_machine;
 
+	typedef struct
+	{
+		int hour_int	;
+		int minutes_int	;
+		int seconds_int	;
+	} filename_time_struct;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -97,10 +104,6 @@
 	 uint8_t first_circle_flag 		= 1;
 	uint32_t circle_u32 			= 0;
 
-	int file_name_hour_int			= 0 ;
-	int file_name_minutes_int		= 0 ;
-	int file_name_seconds_int		= 0 ;
-
 	uint32_t GGA_string_start_u32 = 0;
 	uint32_t GGA_string_end_u32 = 0;
 	char GPGGA_string[GPGGA_STRING_SIZE];
@@ -111,6 +114,7 @@
 
 	GPS_state_machine sm_stage = SM_IDLE;
 	TCHAR str[FILE_NAME_SIZE];
+	filename_time_struct filename_st;
 
 /* USER CODE END PV */
 
@@ -119,6 +123,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
 	uint8_t _char_to_uint8 (uint8_t char_1, uint8_t char_0);
+	void update_time_for_filename(filename_time_struct fl_st);
 
 /* USER CODE END PFP */
 
@@ -356,13 +361,13 @@ int main(void)
 					tmp_time_filename_string[i] = 0x00;
 				}
 				memcpy(tmp_time_filename_string, &GPGGA_string[7], 2);
-				file_name_hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
+				filename_st.hour_int = atoi(tmp_time_filename_string) + TIMEZONE;
 
 				memcpy(tmp_time_filename_string, &GPGGA_string[9], 2);
-				file_name_minutes_int = atoi(tmp_time_filename_string);
+				filename_st.minutes_int = atoi(tmp_time_filename_string);
 
 				memcpy(tmp_time_filename_string, &GPGGA_string[11], 2);
-				file_name_seconds_int = atoi(tmp_time_filename_string);
+				filename_st.seconds_int = atoi(tmp_time_filename_string);
 
 				sm_stage = SM_UPDATE_TIME_FILENAME;
 			} break;
@@ -371,23 +376,7 @@ int main(void)
 
 			case SM_UPDATE_TIME_FILENAME:
 			{
-				if (file_name_seconds_int < 59)
-				{
-					file_name_seconds_int++;
-				}
-				else
-				{
-					file_name_seconds_int = 0;
-					if (file_name_minutes_int < 59)
-					{
-						file_name_minutes_int++;
-					}
-					else
-					{
-						file_name_minutes_int = 0;
-						file_name_hour_int++;
-					}
-				}
+				update_time_for_filename(filename_st);
 				sm_stage = SM_PREPARE_FILENAME;
 			} break;
 			//***********************************************************
@@ -396,9 +385,9 @@ int main(void)
 			case SM_PREPARE_FILENAME:
 			{
 				char current_file_name_char[FILE_NAME_SIZE];
-				char folder_name[FILE_NAME_SIZE];
-				sprintf(folder_name, "0:\\%02d\\%02d", file_name_hour_int, file_name_minutes_int);
-				int file_name_int = file_name_hour_int*10000 + file_name_minutes_int*100 + 12*(file_name_seconds_int/12);
+				//char folder_name[FILE_NAME_SIZE];
+				//sprintf(folder_name, "0:\\%02d\\%02d", file_name_hour_int, file_name_minutes_int);
+				int file_name_int = filename_st.hour_int*10000 + filename_st.minutes_int*100 + 12*(filename_st.seconds_int/12);
 				sprintf(current_file_name_char,"%06d_%d.txt", file_name_int, (int)check_sum_status_flag);
 				//int len = strlen(folder_name) + strlen(current_file_name_char) + strlen("0:\\\\") + 1;
 				int len = strlen(current_file_name_char) + 1;
@@ -605,6 +594,7 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+//***********************************************************
 uint8_t _char_to_uint8 (uint8_t char_1, uint8_t char_0)
 {
 	uint8_t result_u8 = 0;
@@ -626,8 +616,32 @@ uint8_t _char_to_uint8 (uint8_t char_1, uint8_t char_0)
 	{
 		result_u8 = result_u8 + (char_0 - 0x41 +0x0A) ;
 	}
-return result_u8;
+	return result_u8;
 }
+//***********************************************************
+
+void update_time_for_filename(filename_time_struct fl_st)
+{
+	if (fl_st.seconds_int < 59)
+	{
+		fl_st.seconds_int++;
+	}
+	else
+	{
+		fl_st.seconds_int = 0;
+		if (fl_st.minutes_int < 59)
+		{
+			fl_st.minutes_int++;
+		}
+		else
+		{
+			fl_st.minutes_int = 0;
+			fl_st.hour_int++;
+		}
+	}
+}
+//***********************************************************
+
 /* USER CODE END 4 */
 
 /**
