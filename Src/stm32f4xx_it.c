@@ -23,6 +23,9 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
+	#include "NAURocket_FindIt_sm.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,10 +46,6 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
-	extern uint8_t shudown_button_pressed_flag	;
-	extern uint8_t time_write_to_SD_flag		;
-	extern uint8_t time_read_from_SD_u8			;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,6 +60,7 @@
 
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim4;
 extern DMA_HandleTypeDef hdma_usart3_rx;
 /* USER CODE BEGIN EV */
 
@@ -209,8 +209,7 @@ void EXTI2_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI2_IRQn 0 */
 
-	TIM3->CNT = 0;
-	//HAL_TIM_Base_Start_IT(&htim3);
+	TIM3_end_of_packet_Reset();
 
   /* USER CODE END EXTI2_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
@@ -240,7 +239,7 @@ void EXTI9_5_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI9_5_IRQn 0 */
 
-	 shudown_button_pressed_flag = 1;
+	Update_flag_shudown_button_pressed();
 
   /* USER CODE END EXTI9_5_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8);
@@ -258,15 +257,31 @@ void TIM3_IRQHandler(void)
 
 	//HAL_GPIO_TogglePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin);
 	//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
-	time_write_to_SD_flag = 1;
-//	HAL_TIM_Base_Stop_IT(&htim3);
-//	HAL_TIM_Base_Stop(&htim3);
+
+	Update_flag_end_of_UART_packet();
 
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
 
   /* USER CODE END TIM3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM4 global interrupt.
+  */
+void TIM4_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM4_IRQn 0 */
+
+	Update_No_Signal();
+	//	HAL_GPIO_TogglePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin);
+
+  /* USER CODE END TIM4_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim4);
+  /* USER CODE BEGIN TIM4_IRQn 1 */
+
+  /* USER CODE END TIM4_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
