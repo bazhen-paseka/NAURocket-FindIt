@@ -62,8 +62,10 @@ void Error_Handler(void);
 #define USART_TX_GPIO_Port GPIOA
 #define USART_RX_Pin GPIO_PIN_3
 #define USART_RX_GPIO_Port GPIOA
-#define TEST_PIN_Pin GPIO_PIN_6
-#define TEST_PIN_GPIO_Port GPIOC
+#define TEST_PC5_Pin GPIO_PIN_5
+#define TEST_PC5_GPIO_Port GPIOC
+#define TEST_PC6_Pin GPIO_PIN_6
+#define TEST_PC6_GPIO_Port GPIOC
 #define SHUTDOWN_BUTTON_Pin GPIO_PIN_8
 #define SHUTDOWN_BUTTON_GPIO_Port GPIOC
 #define SHUTDOWN_BUTTON_EXTI_IRQn EXTI9_5_IRQn
