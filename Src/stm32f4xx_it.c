@@ -275,7 +275,7 @@ void TIM4_IRQHandler(void)
   /* USER CODE BEGIN TIM4_IRQn 0 */
 
 	Update_No_Signal();
-	HAL_GPIO_TogglePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin);
+	//	HAL_GPIO_TogglePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin);
 
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);

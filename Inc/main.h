@@ -69,6 +69,8 @@ void Error_Handler(void);
 #define SHUTDOWN_BUTTON_Pin GPIO_PIN_8
 #define SHUTDOWN_BUTTON_GPIO_Port GPIOC
 #define SHUTDOWN_BUTTON_EXTI_IRQn EXTI9_5_IRQn
+#define TEST_PA12_Pin GPIO_PIN_12
+#define TEST_PA12_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
