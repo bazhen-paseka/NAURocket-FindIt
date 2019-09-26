@@ -108,7 +108,7 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
-  	  NAURocket_FindIt_Init();
+  	  NAUR_Init();
 
   /* USER CODE END 2 */
 
@@ -117,7 +117,7 @@ int main(void)
 
   while (1)
   {
-	  NAURocket_FindIt_Main();
+	  NAUR_Main();
 
     /* USER CODE END WHILE */
 
