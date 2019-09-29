@@ -237,7 +237,7 @@ void EXTI9_5_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI9_5_IRQn 0 */
 
-	Update_flag_shudown_button_pressed();
+	Update_flag_Shudown_button_pressed();
 
   /* USER CODE END EXTI9_5_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8);
@@ -253,10 +253,7 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 
-	//HAL_GPIO_TogglePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin);
-	//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_SET);
-
-	Update_flag_end_of_UART_packet();
+	Update_flag_End_of_UART_packet();
 
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
@@ -272,7 +269,7 @@ void TIM4_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM4_IRQn 0 */
 
-	Update_No_Signal();
+	Update_No_signal();
 
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
