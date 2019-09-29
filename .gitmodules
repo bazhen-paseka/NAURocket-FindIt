@@ -7,3 +7,6 @@
 [submodule "Drivers/NAURocket_FindIt_sm"]
 	path = Drivers/NAURocket_FindIt_sm
 	url = https://github.com/bazhen-paseka/NAURocket_FindIt_sm.git
+[submodule "Drivers/SD_card_SPI_TechM_SM"]
+	path = Drivers/SD_card_SPI_TechM_SM
+	url = https://github.com/bazhen-paseka/SD_card_SPI_TechM_SM.git

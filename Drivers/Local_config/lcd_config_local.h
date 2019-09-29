@@ -8,6 +8,12 @@
 //#define NEW_RST
 //#define NEW_BIT1
 
+//#define USE_FONT8
+#define USE_FONT12
+//#define USE_FONT16
+//#define USE_FONT20
+//#define USE_FONT24
+
 	// Please uncomment one of the lines to select your LCD chip
 //#define ILI9325			// works!!
 //#define ILI9328			// works!!
