@@ -210,7 +210,7 @@ void EXTI2_IRQHandler(void)
   /* USER CODE BEGIN EXTI2_IRQn 0 */
 
 	TIM3_end_of_packet_Reset();
-
+	//HAL_GPIO_TogglePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin);
   /* USER CODE END EXTI2_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
   /* USER CODE BEGIN EXTI2_IRQn 1 */
