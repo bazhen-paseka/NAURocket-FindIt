@@ -208,9 +208,7 @@ void SysTick_Handler(void)
 void EXTI2_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI2_IRQn 0 */
-
-	TIM3_end_of_packet_Reset();
-	//HAL_GPIO_TogglePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin);
+		TIM3_end_of_packet_Reset();
   /* USER CODE END EXTI2_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
   /* USER CODE BEGIN EXTI2_IRQn 1 */
@@ -275,7 +273,6 @@ void TIM4_IRQHandler(void)
   /* USER CODE BEGIN TIM4_IRQn 0 */
 
 	Update_No_Signal();
-	//	HAL_GPIO_TogglePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin);
 
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
