@@ -106,6 +106,7 @@ int main(void)
   MX_UART5_Init();
   MX_IWDG_Init();
   MX_TIM4_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   	  NAUR_Init();

@@ -4,7 +4,7 @@
 	#define	NAUR_FI_F103	0
 	#define	NAUR_FI_F446	1
 
-	#define DEBUG_MODE		1
+	#define DEBUG_MODE		0
 
 	#define CLUSTER_512		512
 	#define CLUSTER_1024	1024
