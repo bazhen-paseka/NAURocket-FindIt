@@ -58,10 +58,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define TEST_PC5_Pin GPIO_PIN_5
-#define TEST_PC5_GPIO_Port GPIOC
-#define TEST_PC6_Pin GPIO_PIN_6
-#define TEST_PC6_GPIO_Port GPIOC
+#define TEST_PN2_Pin GPIO_PIN_5
+#define TEST_PN2_GPIO_Port GPIOC
+#define TEST_PN1_Pin GPIO_PIN_6
+#define TEST_PN1_GPIO_Port GPIOC
 #define SHUTDOWN_BUTTON_Pin GPIO_PIN_8
 #define SHUTDOWN_BUTTON_GPIO_Port GPIOC
 #define SHUTDOWN_BUTTON_EXTI_IRQn EXTI9_5_IRQn
