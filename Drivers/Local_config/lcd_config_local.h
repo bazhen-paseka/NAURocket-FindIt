@@ -8,6 +8,8 @@
 //#define NEW_RST
 //#define NEW_BIT1
 
+#define ILI9340_COLOR_INVERT
+
 //#define USE_FONT8
 #define USE_FONT12
 //#define USE_FONT16
