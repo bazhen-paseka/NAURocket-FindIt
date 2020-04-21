@@ -58,6 +58,9 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define UART2_IRQ_Pin GPIO_PIN_4
+#define UART2_IRQ_GPIO_Port GPIOC
+#define UART2_IRQ_EXTI_IRQn EXTI4_IRQn
 #define SHUTDOWN_BUTTON_Pin GPIO_PIN_8
 #define SHUTDOWN_BUTTON_GPIO_Port GPIOC
 #define SHUTDOWN_BUTTON_EXTI_IRQn EXTI9_5_IRQn
