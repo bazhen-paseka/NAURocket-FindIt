@@ -288,7 +288,7 @@ void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
 
-		Set_flag_End_of_UART_2_packet();
+		Set_flag_End_of_UART_packet(GPS_CH_2);
 
   /* USER CODE END TIM2_IRQn 0 */
   HAL_TIM_IRQHandler(&htim2);
@@ -304,7 +304,7 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 
-		Set_flag_End_of_UART_3_packet();
+		Set_flag_End_of_UART_packet(GPS_CH_3);
 
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
