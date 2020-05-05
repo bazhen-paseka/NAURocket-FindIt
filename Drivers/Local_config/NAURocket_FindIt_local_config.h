@@ -4,7 +4,7 @@
 	#define	NAUR_FI_F103	0
 	#define	NAUR_FI_F446	1
 
-	#define SOFT_VERSION	320
+	#define SOFT_VERSION	400
 
 	#define DEBUG_MODE		1
 
